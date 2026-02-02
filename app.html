@@ -5,22 +5,97 @@
   <title>Agenda • BRsys</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- ✅ use caminho absoluto pra não dar 404 -->
+  <!-- SEO mínimo -->
+  <meta name="description" content="Agenda simples para hotéis e pousadas. Controle reservas sem complicação. WhatsApp integrado." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/app.html" />
+
+  <!-- OpenGraph mínimo (se já tiver og) -->
+  <meta property="og:title" content="Agenda • BRsys" />
+  <meta property="og:description" content="Agenda simples para hotéis e pousadas. Sem PMS, sem complicação." />
+  <meta property="og:url" content="https://agenda.brsys.com.br/app.html" />
+  <meta property="og:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+
+  <!-- CSS -->
   <link rel="stylesheet" href="/css/app.css" />
 </head>
-<body>
 
-<main class="wrap">
-  <h1>Agenda BRsys</h1>
-  <p class="muted">Bem-vindo 👋</p>
+<body class="app-body">
 
-  <div id="userInfo"></div>
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-sub muted">V1 • em implantação</div>
+      </div>
 
-  <button id="logout" class="btn outline">Sair</button>
-</main>
+      <div class="userbox">
+        <div class="muted small">Bem-vindo 👋</div>
+        <div class="small"><strong>Usuário:</strong></div>
+        <div id="userEmail" class="mono small">carregando…</div>
+        <button id="logout" class="btn outline small">Sair</button>
+      </div>
+    </div>
+  </header>
 
-<!-- ✅ auth roda primeiro (guard) -->
-<script type="module" src="/js/auth.js"></script>
-<script type="module" src="/js/app.js"></script>
+  <!-- Conteúdo -->
+  <main class="wrap main">
+    <section class="card">
+
+      <!-- Estado: Loading -->
+      <div id="stateLoading">
+        <h1 class="h1">Carregando sua agenda…</h1>
+        <p class="muted">Aguarde um instante.</p>
+
+        <div class="skeleton">
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+        </div>
+      </div>
+
+      <!-- Estado: Empty -->
+      <div id="stateEmpty" style="display:none;">
+        <h1 class="h1">Nenhuma reserva ainda</h1>
+        <p class="muted">
+          Esta é a V1 da Agenda BRsys. Aqui você vai registrar reservas com nome, WhatsApp e datas.
+        </p>
+
+        <div class="cta-row">
+          <button id="btnNew" class="btn primary">+ Nova reserva</button>
+          <a class="btn outline" href="/" title="Voltar para a página inicial">Voltar</a>
+        </div>
+
+        <div class="tips">
+          <p class="muted small">
+            Dica: comece criando 1 reserva teste para validar o fluxo.
+          </p>
+        </div>
+      </div>
+
+      <!-- Estado: Lista -->
+      <div id="stateList" style="display:none;">
+        <div class="row">
+          <h1 class="h1">Reservas</h1>
+          <button id="btnNew2" class="btn primary">+ Nova</button>
+        </div>
+
+        <div id="list" class="list"></div>
+      </div>
+
+    </section>
+
+    <footer class="foot muted small">
+      BRsys Agenda • V1 • suporte via WhatsApp
+    </footer>
+  </main>
+
+  <!-- Guard auth primeiro -->
+  <script type="module" src="/js/auth.js"></script>
+  <script type="module" src="/js/app.js"></script>
+
 </body>
 </html>
