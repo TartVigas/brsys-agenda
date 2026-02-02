@@ -9,7 +9,7 @@
   <meta name="description" content="Agenda simples para hotéis e pousadas. Controle reservas sem complicação. WhatsApp integrado." />
   <link rel="canonical" href="https://agenda.brsys.com.br/app.html" />
 
-  <!-- OpenGraph mínimo (se já tiver og) -->
+  <!-- OpenGraph -->
   <meta property="og:title" content="Agenda • BRsys" />
   <meta property="og:description" content="Agenda simples para hotéis e pousadas. Sem PMS, sem complicação." />
   <meta property="og:url" content="https://agenda.brsys.com.br/app.html" />
@@ -17,6 +17,7 @@
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/favicon.png" />
 
   <!-- CSS -->
   <link rel="stylesheet" href="/css/app.css" />
@@ -24,7 +25,7 @@
 
 <body class="app-body">
 
-    <!-- Topbar -->
+  <!-- Topbar -->
   <header class="topbar">
     <div class="wrap topbar-inner">
       <div class="brand">
@@ -70,9 +71,7 @@
         </div>
 
         <div class="tips">
-          <p class="muted small">
-            Dica: comece criando 1 reserva teste para validar o fluxo.
-          </p>
+          <p class="muted small">Dica: comece criando 1 reserva teste para validar o fluxo.</p>
         </div>
       </div>
 
@@ -83,6 +82,7 @@
           <button id="btnNew2" class="btn primary">+ Nova</button>
         </div>
 
+        <!-- A lista é preenchida via app.js -->
         <div id="list" class="list"></div>
       </div>
 
@@ -93,50 +93,50 @@
     </footer>
   </main>
 
-  <!-- Guard auth primeiro -->
+  <!-- Modal Nova Reserva -->
+  <div id="modalBackdrop" class="modal-backdrop hidden">
+    <div class="modal">
+      <h2>Nova reserva</h2>
+
+      <form id="formReserva" autocomplete="off">
+        <label>
+          Nome do hóspede
+          <input type="text" id="nome" name="nome" required />
+        </label>
+
+        <label>
+          WhatsApp
+          <input type="text" id="whatsapp" name="whatsapp" placeholder="(13) 99740-8157" />
+        </label>
+
+        <div class="grid-2">
+          <label>
+            Check-in
+            <input type="text" id="checkin" name="checkin" placeholder="DD/MM/AAAA" required inputmode="numeric" />
+          </label>
+
+          <label>
+            Check-out
+            <input type="text" id="checkout" name="checkout" placeholder="DD/MM/AAAA" required inputmode="numeric" />
+          </label>
+        </div>
+
+        <label>
+          Observações
+          <textarea id="obs" name="obs" rows="2" placeholder="Ex: quarto 03, pagamento na chegada…"></textarea>
+        </label>
+
+        <div class="modal-actions">
+          <button type="button" id="cancelar" class="btn outline">Cancelar</button>
+          <button type="submit" class="btn primary">Salvar reserva</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Guard primeiro -->
   <script type="module" src="/js/auth.js"></script>
   <script type="module" src="/js/app.js"></script>
 
-  <!-- Modal Nova Reserva -->
-<div id="modalBackdrop" class="modal-backdrop hidden">
-  <div class="modal">
-    <h2>Nova reserva</h2>
-
-    <form id="formReserva">
-      <label>
-        Nome do hóspede
-        <input type="text" id="nome" required />
-      </label>
-
-      <label>
-        WhatsApp
-        <input type="text" id="whatsapp" placeholder="(11) 99999-9999" />
-      </label>
-
-      <div class="grid-2">
-        <label>
-          Check-in
-          <input type="text" id="checkin" placeholder="DD/MM/AAAA" required />
-        </label>
-
-        <label>
-          Check-out
-          <input type="text" id="checkout" placeholder="DD/MM/AAAA" required />
-        </label>
-      </div>
-
-      <label>
-        Observações
-        <textarea id="obs" rows="2"></textarea>
-      </label>
-
-      <div class="modal-actions">
-        <button type="button" id="cancelar" class="btn outline">Cancelar</button>
-        <button type="submit" class="btn primary">Salvar reserva</button>
-      </div>
-    </form>
-  </div>
-</div>
-  
 </body>
 </html>
