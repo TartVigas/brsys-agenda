@@ -1,67 +1,147 @@
 import { supabase } from "./supabase.js";
 
-/* ========= Utils Datas ========= */
-function brToISO(br){
-  // DD/MM/AAAA → YYYY-MM-DD
-  const [d,m,y] = br.split("/");
-  return `${y}-${m}-${d}`;
+/* =========================
+   Utils: segurança básica
+========================= */
+function escapeHtml(s = "") {
+  return String(s).replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }[m]));
 }
 
-function normalizeBRDate(value){
+/* =========================
+   Utils: Datas BR ⇄ ISO
+   Aceita:
+   - 05022026
+   - 05/02/2026
+   - 05-02-2026
+========================= */
+function normalizeBRDate(value) {
   if (!value) return null;
 
-  // remove tudo que não for número
-  const digits = value.replace(/\D/g, "");
-
+  const digits = String(value).replace(/\D/g, "").slice(0, 8);
   if (digits.length !== 8) return null;
 
-  const d = digits.substring(0,2);
-  const m = digits.substring(2,4);
-  const y = digits.substring(4,8);
+  const d = digits.slice(0, 2);
+  const m = digits.slice(2, 4);
+  const y = digits.slice(4, 8);
 
   return `${d}/${m}/${y}`;
 }
 
-function brToISO(value){
-  const br = normalizeBRDate(value);
-  if (!br) return null;
+function isValidBRDate(br) {
+  // br = DD/MM/AAAA
+  if (!br) return false;
+  const m = br.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return false;
 
-  const [d,m,y] = br.split("/");
+  const dd = Number(m[1]);
+  const mm = Number(m[2]);
+  const yy = Number(m[3]);
+
+  if (yy < 1900 || yy > 2100) return false;
+  if (mm < 1 || mm > 12) return false;
+
+  const daysInMonth = new Date(yy, mm, 0).getDate(); // mm=1..12 ok
+  if (dd < 1 || dd > daysInMonth) return false;
+
+  return true;
+}
+
+function brToISO(value) {
+  // retorna YYYY-MM-DD ou null
+  const br = normalizeBRDate(value);
+  if (!br || !isValidBRDate(br)) return null;
+
+  const [d, m, y] = br.split("/");
   return `${y}-${m}-${d}`;
 }
 
-function isoToBR(iso){
-  const [y,m,d] = iso.split("-");
+function isoToBR(iso) {
+  if (!iso) return "";
+  const [y, m, d] = String(iso).split("-");
+  if (!y || !m || !d) return "";
   return `${d}/${m}/${y}`;
 }
 
-/* ========= Elements ========= */
+/* =========================
+   Elements
+========================= */
 const modal = document.getElementById("modalBackdrop");
 const form = document.getElementById("formReserva");
 const btnCancel = document.getElementById("cancelar");
 
 const stateLoading = document.getElementById("stateLoading");
-const stateEmpty   = document.getElementById("stateEmpty");
-const stateList    = document.getElementById("stateList");
-const listEl       = document.getElementById("list");
+const stateEmpty = document.getElementById("stateEmpty");
+const stateList = document.getElementById("stateList");
+const listEl = document.getElementById("list");
 
-/* ========= State ========= */
-function show(which){
+const inputCheckin = document.getElementById("checkin");
+const inputCheckout = document.getElementById("checkout");
+
+/* =========================
+   State UI
+========================= */
+function show(which) {
+  if (!stateLoading || !stateEmpty || !stateList) return;
+
   stateLoading.style.display = which === "loading" ? "" : "none";
-  stateEmpty.style.display   = which === "empty" ? "" : "none";
-  stateList.style.display    = which === "list" ? "" : "none";
+  stateEmpty.style.display = which === "empty" ? "" : "none";
+  stateList.style.display = which === "list" ? "" : "none";
 }
 
-/* ========= Modal ========= */
-function openModal(){ modal.classList.remove("hidden"); }
-function closeModal(){ modal.classList.add("hidden"); form.reset(); }
+/* =========================
+   Modal
+========================= */
+function openModal() {
+  modal?.classList.remove("hidden");
+}
+function closeModal() {
+  modal?.classList.add("hidden");
+  form?.reset();
+}
 
 document.getElementById("btnNew")?.addEventListener("click", openModal);
 document.getElementById("btnNew2")?.addEventListener("click", openModal);
 btnCancel?.addEventListener("click", closeModal);
 
-/* ========= Load Reservas ========= */
-async function loadReservas(){
+// fechar ao clicar fora do modal (opcional, elegante)
+modal?.addEventListener("click", (e) => {
+  if (e.target === modal) closeModal();
+});
+
+/* =========================
+   Máscara de data BR (input)
+========================= */
+function maskDateInput(el) {
+  if (!el) return;
+
+  el.addEventListener("input", () => {
+    let v = el.value.replace(/\D/g, "").slice(0, 8);
+
+    if (v.length >= 5) el.value = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
+    else if (v.length >= 3) el.value = `${v.slice(0, 2)}/${v.slice(2)}`;
+    else el.value = v;
+  });
+
+  // ao sair do campo, normaliza pra DD/MM/AAAA se tiver 8 dígitos
+  el.addEventListener("blur", () => {
+    const n = normalizeBRDate(el.value);
+    if (n) el.value = n;
+  });
+}
+
+maskDateInput(inputCheckin);
+maskDateInput(inputCheckout);
+
+/* =========================
+   Load Reservas
+========================= */
+async function loadReservas() {
   show("loading");
 
   const { data, error } = await supabase
@@ -69,32 +149,36 @@ async function loadReservas(){
     .select("*")
     .order("checkin", { ascending: true });
 
-  if (error){
-    console.error(error);
+  if (error) {
+    console.error("[reservas] select error:", error);
     show("empty");
     return;
   }
 
-  if (!data.length){
+  if (!data || data.length === 0) {
     show("empty");
     return;
   }
 
-  listEl.innerHTML = data.map(r => `
-    <article class="item">
-      <strong>${r.nome}</strong>
-      <div class="muted small">
-        ${isoToBR(r.checkin)} → ${isoToBR(r.checkout)}
-        ${r.whatsapp ? " • " + r.whatsapp : ""}
-      </div>
-    </article>
-  `).join("");
+  if (listEl) {
+    listEl.innerHTML = data.map((r) => `
+      <article class="item">
+        <strong>${escapeHtml(r.nome)}</strong>
+        <div class="muted small">
+          ${escapeHtml(isoToBR(r.checkin))} → ${escapeHtml(isoToBR(r.checkout))}
+          ${r.whatsapp ? " • " + escapeHtml(r.whatsapp) : ""}
+        </div>
+      </article>
+    `).join("");
+  }
 
   show("list");
 }
 
-/* ========= Submit ========= */
-form.addEventListener("submit", async (e)=>{
+/* =========================
+   Submit (Insert)
+========================= */
+form?.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const nome = form.nome.value.trim();
@@ -103,39 +187,55 @@ form.addEventListener("submit", async (e)=>{
   const checkoutBR = form.checkout.value;
   const obs = form.obs.value.trim();
 
-  if (!nome || !checkinBR || !checkoutBR){
-    alert("Preencha nome e datas.");
+  if (!nome) {
+    alert("Preencha o nome do hóspede.");
     return;
   }
 
   const checkin = brToISO(checkinBR);
   const checkout = brToISO(checkoutBR);
 
-  if (checkout < checkin){
+  if (!checkin || !checkout) {
+    alert("Data inválida. Use DD/MM/AAAA.");
+    return;
+  }
+
+  // comparação ISO funciona (YYYY-MM-DD)
+  if (checkout < checkin) {
     alert("Check-out não pode ser antes do check-in.");
     return;
   }
 
-  const { data: userData } = await supabase.auth.getUser();
+  const { data: userData, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userData?.user) {
+    console.error("[auth] getUser error:", userErr);
+    alert("Sessão não encontrada. Faça login novamente.");
+    window.location.href = "/entrar.html";
+    return;
+  }
 
-  const { error } = await supabase.from("reservas").insert({
+  const payload = {
     user_id: userData.user.id,
     nome,
-    whatsapp,
+    whatsapp: whatsapp || null,
     checkin,
     checkout,
-    obs
-  });
+    obs: obs || null,
+  };
 
-  if (error){
-    alert("Erro ao salvar reserva.");
-    console.error(error);
+  const { error } = await supabase.from("reservas").insert(payload);
+
+  if (error) {
+    console.error("[reservas] insert error:", error);
+    alert("Erro ao salvar reserva. Veja o console.");
     return;
   }
 
   closeModal();
-  loadReservas();
+  await loadReservas();
 });
 
-/* ========= Boot ========= */
+/* =========================
+   Boot
+========================= */
 loadReservas();
