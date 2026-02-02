@@ -114,3 +114,32 @@ btnSend?.addEventListener("click", async (e) => {
     setMsg("Digite seu e-mail para receber o link de acesso.", "info");
   }
 })();
+let sending = false;
+
+async function sendMagicLink(email) {
+  if (sending) return;
+  sending = true;
+
+  setMsg("Enviando link de acesso...", "info");
+  setLoading(true);
+
+  const emailRedirectTo = buildRedirectToEntrar();
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo,
+      shouldCreateUser: true,
+    },
+  });
+
+  sending = false;
+  setLoading(false);
+
+  if (error) {
+    setMsg("Erro ao enviar link. Tente novamente.", "error");
+    return;
+  }
+
+  setMsg("Pronto! Verifique seu e-mail (entrada ou spam).", "ok");
+}
