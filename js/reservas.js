@@ -1,243 +1,276 @@
-// js/reservas.js
+// /js/reservas.js
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
-const stateLoading = document.getElementById("stateLoading");
-const stateEmpty = document.getElementById("stateEmpty");
-const stateList = document.getElementById("stateList");
-const stateError = document.getElementById("stateError");
+/* =========================
+   Helpers
+========================= */
+function ymdTodayLocal() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
-const listEl = document.getElementById("list");
-const countEl = document.getElementById("count");
-const msgEl = document.getElementById("msg");
+function escapeHtml(str = "") {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-const qEl = document.getElementById("q");
-const fStatusEl = document.getElementById("fStatus");
-const btnLimpar = document.getElementById("btnLimpar");
-const btnRetry = document.getElementById("btnRetry");
+function onlyDigits(s = "") {
+  return String(s).replace(/\D/g, "");
+}
 
-let USER = null;
-let allRows = [];
+function toWaLink(phoneRaw, text = "") {
+  const digits = onlyDigits(phoneRaw);
+  if (!digits) return null;
+  const full = digits.startsWith("55") ? digits : `55${digits}`;
+  const qs = text ? `?text=${encodeURIComponent(text)}` : "";
+  return `https://wa.me/${full}${qs}`;
+}
 
-function show(el){ if (el) el.style.display = ""; }
-function hide(el){ if (el) el.style.display = "none"; }
+function fmtDateBR(ymd) {
+  if (!ymd || typeof ymd !== "string" || ymd.length < 10) return ymd || "";
+  const [y, m, d] = ymd.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+}
 
-function setMsg(text, type="info"){
-  if (!msgEl) return;
-  msgEl.textContent = text || "";
-  msgEl.style.color =
+function getName(r) {
+  return r.nome_hospede || r.guest_name || r.nome || r.hospede || "Hóspede";
+}
+function getPhone(r) {
+  return r.whatsapp || r.guest_phone || r.telefone || r.phone || "";
+}
+function getCheckin(r) {
+  return r.checkin || r.check_in || "";
+}
+function getCheckout(r) {
+  return r.checkout || r.check_out || "";
+}
+function getObs(r) {
+  return r.observacoes || r.obs || r.notes || r.observacao || "";
+}
+
+function setMsg(text = "", type = "info") {
+  const el = document.getElementById("msg");
+  if (!el) return;
+  el.textContent = text;
+
+  el.style.color =
     type === "error" ? "rgba(255,120,120,.95)" :
     type === "ok"    ? "rgba(102,242,218,.95)" :
                        "rgba(255,255,255,.70)";
 }
 
-function onlyDigits(v){ return (v||"").toString().replace(/\D/g,""); }
+function showState(which) {
+  const loading = document.getElementById("stateLoading");
+  const empty = document.getElementById("stateEmpty");
+  const list = document.getElementById("stateList");
 
-function isoToBR(iso){
-  if (!iso) return "";
-  const p = iso.toString().slice(0,10);
-  const [y,m,d] = p.split("-");
-  if (!y || !m || !d) return "";
-  return `${d}/${m}/${y}`;
+  if (loading) loading.style.display = which === "loading" ? "" : "none";
+  if (empty) empty.style.display = which === "empty" ? "" : "none";
+  if (list) list.style.display = which === "list" ? "" : "none";
 }
 
-function statusLabel(s){
-  const v = (s||"").toString().trim().toLowerCase();
-  if (!v) return "Pendente";
-  if (v === "confirmada" || v === "confirmado") return "Confirmada";
-  if (v === "cancelada" || v === "cancelado") return "Cancelada";
-  if (v === "pendente") return "Pendente";
-  return v.charAt(0).toUpperCase() + v.slice(1);
+function isTodayRow(r, today) {
+  const ci = getCheckin(r);
+  const co = getCheckout(r);
+  // Hoje inclui: checkin hoje OR checkout hoje OR hospedado hoje (ci <= hoje < co)
+  return (
+    ci === today ||
+    co === today ||
+    (ci && co && ci <= today && co > today)
+  );
 }
 
-function statusClass(s){
-  const v = (s||"").toString().trim().toLowerCase();
-  // usa classes já existentes? vamos manter no inline com “pill” do teu CSS
-  // mas dá pra diferenciar com data-attr e deixar o CSS evoluir depois
-  if (v === "confirmada" || v === "confirmado") return "ok";
-  if (v === "cancelada" || v === "cancelado") return "bad";
-  return "warn";
+function isFutureRow(r, today) {
+  const ci = getCheckin(r);
+  return !!ci && ci > today;
 }
 
-function buildWhatsLink(raw){
-  const digits = onlyDigits(raw);
-  if (!digits || digits.length < 10) return null;
-  const ddi = digits.startsWith("55") ? digits : `55${digits}`;
-  return `https://wa.me/${ddi}`;
+function isPastRow(r, today) {
+  const co = getCheckout(r);
+  return !!co && co < today;
 }
 
-function escapeHtml(s){
-  return (s ?? "").toString()
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
+function applyFilter(rows, filter, today) {
+  if (filter === "today") return rows.filter(r => isTodayRow(r, today));
+  if (filter === "future") return rows.filter(r => isFutureRow(r, today));
+  if (filter === "past") return rows.filter(r => isPastRow(r, today));
+  return rows;
 }
 
-function renderRow(r){
-  const id = r.id;
-  const nome = escapeHtml(r.nome_hospede || "(sem nome)");
-  const whats = r.whatsapp ? escapeHtml(r.whatsapp) : "";
-  const checkin = isoToBR(r.checkin);
-  const checkout = isoToBR(r.checkout);
-  const obs = escapeHtml(r.observacoes || "");
-  const st = statusLabel(r.status);
-  const stClass = statusClass(r.status);
+function applySearch(rows, q) {
+  const query = (q || "").trim().toLowerCase();
+  if (!query) return rows;
 
-  const whatsUrl = buildWhatsLink(r.whatsapp);
-  const sub = `${checkin || "—"} → ${checkout || "—"}`;
-
-  return `
-    <article class="card" style="margin:10px 0;">
-      <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-        <div style="min-width:220px;">
-          <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;">
-            <h3 class="h3" style="margin:0;">${nome}</h3>
-            <span class="pill" data-status="${escapeHtml(stClass)}">${escapeHtml(st)}</span>
-          </div>
-          <div class="muted small" style="margin-top:6px;">${escapeHtml(sub)}</div>
-          ${whats ? `<div class="muted small" style="margin-top:4px;">Whats: <span class="mono">${whats}</span></div>` : ""}
-          ${obs ? `<div class="muted small" style="margin-top:6px;">Obs: ${obs}</div>` : ""}
-        </div>
-
-        <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;">
-          <a class="btn outline small" href="/reserva.html?id=${encodeURIComponent(id)}">Abrir</a>
-          ${whatsUrl ? `<a class="btn outline small" href="${whatsUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}
-        </div>
-      </div>
-    </article>
-  `;
+  return rows.filter(r => {
+    const name = String(getName(r)).toLowerCase();
+    const phone = String(getPhone(r)).toLowerCase();
+    const obs = String(getObs(r)).toLowerCase();
+    return name.includes(query) || phone.includes(query) || obs.includes(query);
+  });
 }
 
-function applyFilters(){
-  const q = (qEl?.value || "").trim().toLowerCase();
-  const st = (fStatusEl?.value || "").trim().toLowerCase();
+function statusBadge(r, today) {
+  const ci = getCheckin(r);
+  const co = getCheckout(r);
 
-  let rows = [...allRows];
+  let label = "Reserva";
+  if (ci === today) label = "Check-in hoje";
+  else if (co === today) label = "Check-out hoje";
+  else if (ci && co && ci <= today && co > today) label = "Hospedado";
+  else if (ci && ci > today) label = "Futura";
+  else if (co && co < today) label = "Finalizada";
 
-  if (st) {
-    rows = rows.filter(r => ((r.status || "").toString().trim().toLowerCase()) === st);
-  }
-
-  if (q) {
-    rows = rows.filter(r => {
-      const nome = (r.nome_hospede || "").toString().toLowerCase();
-      const whats = (r.whatsapp || "").toString().toLowerCase();
-      return nome.includes(q) || whats.includes(q) || onlyDigits(whats).includes(onlyDigits(q));
-    });
-  }
-
-  renderList(rows);
+  return `<span class="pill">${escapeHtml(label)}</span>`;
 }
 
-function renderList(rows){
-  if (countEl) countEl.textContent = String(rows.length);
+function renderList(rows, today) {
+  const host = document.getElementById("list");
+  if (!host) return;
 
   if (!rows.length) {
-    // se tem reservas mas filtro zerou, fica list mas com msg
-    show(stateList);
-    hide(stateLoading);
-    hide(stateEmpty);
-    hide(stateError);
-
-    if (listEl) listEl.innerHTML = `
-      <div class="muted">Nenhum resultado para o filtro atual.</div>
+    host.innerHTML = `
+      <div class="muted small" style="padding:10px 0;">
+        Nenhum resultado com o filtro/busca atual.
+      </div>
     `;
-    setMsg("Ajuste o filtro ou limpe para ver tudo.", "info");
     return;
   }
 
-  if (listEl) {
-    listEl.innerHTML = rows.map(renderRow).join("");
-  }
+  host.innerHTML = rows.map(r => {
+    const id = r.id;
+    const name = getName(r);
+    const phone = getPhone(r);
+    const ci = fmtDateBR(getCheckin(r));
+    const co = fmtDateBR(getCheckout(r));
+    const obs = getObs(r);
+    const wa = toWaLink(phone, `Olá ${name}! Aqui é da recepção.`);
+    const badge = statusBadge(r, today);
 
-  show(stateList);
-  hide(stateLoading);
-  hide(stateEmpty);
-  hide(stateError);
-  setMsg("", "info");
+    return `
+      <article class="card" style="padding:12px;margin:10px 0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div style="min-width:260px;flex:1;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <div style="font-weight:800;font-size:16px;">${escapeHtml(name)}</div>
+              ${badge}
+            </div>
+
+            <div class="muted small" style="margin-top:6px;">
+              Período: <strong>${escapeHtml(ci)}</strong> → <strong>${escapeHtml(co)}</strong>
+            </div>
+
+            <div class="muted small" style="margin-top:4px;">
+              WhatsApp: ${phone ? `<span class="mono">${escapeHtml(phone)}</span>` : "—"}
+            </div>
+
+            ${obs ? `<div class="muted small" style="margin-top:8px;">Obs: ${escapeHtml(obs)}</div>` : ""}
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;">
+            ${
+              wa
+                ? `<a class="btn outline small" href="${wa}" target="_blank" rel="noopener noreferrer">WhatsApp</a>`
+                : `<button class="btn outline small" disabled style="opacity:.55;">WhatsApp</button>`
+            }
+            <a class="btn ghost small" href="/reserva.html?id=${encodeURIComponent(id)}">Abrir</a>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
-async function fetchReservas(){
-  // tenta pegar o máximo “safe” de colunas.
-  // Se "status" não existir, o Supabase vai dar erro de coluna.
-  // Então fazemos fallback com um select mínimo.
-  try {
-    const { data, error } = await supabase
-      .from("agenda_reservas")
-      .select("id, nome_hospede, whatsapp, checkin, checkout, observacoes, status, created_at")
-      .order("checkin", { ascending: true });
-
-    if (error) throw error;
-    return data || [];
-  } catch (e) {
-    console.warn("[reservas] select full failed, trying fallback:", e?.message || e);
-
-    const { data, error } = await supabase
-      .from("agenda_reservas")
-      .select("id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at")
-      .order("checkin", { ascending: true });
-
-    if (error) throw error;
-
-    // injeta status vazio para UI
-    return (data || []).map(r => ({ ...r, status: "" }));
-  }
-}
-
-async function boot(){
-  USER = await requireAuth({
-    redirectTo: "/entrar.html?next=" + encodeURIComponent(window.location.pathname + window.location.search),
-    renderUserInfo: false
-  });
+/* =========================
+   Boot
+========================= */
+(async function boot() {
+  const USER = await requireAuth({ redirectTo: "/entrar.html?next=/reservas.html" });
   if (!USER) return;
 
-  try {
-    show(stateLoading);
-    hide(stateEmpty);
-    hide(stateList);
-    hide(stateError);
-    setMsg("Carregando reservas…", "info");
+  const today = ymdTodayLocal();
 
-    allRows = await fetchReservas();
+  // UI refs
+  const qEl = document.getElementById("q");
+  const summaryEl = document.getElementById("summary");
 
-    if (!allRows.length) {
-      hide(stateLoading);
-      hide(stateList);
-      hide(stateError);
-      show(stateEmpty);
-      setMsg("", "info");
-      return;
+  // filtro atual
+  let currentFilter = "all";
+  let allRows = [];
+
+  // bind filtros
+  const filterBtns = [...document.querySelectorAll("[data-filter]")];
+  function paintFilter() {
+    filterBtns.forEach(btn => {
+      const on = btn.getAttribute("data-filter") === currentFilter;
+      btn.style.opacity = on ? "1" : "0.75";
+      btn.style.borderColor = on ? "rgba(102,242,218,.55)" : "";
+    });
+  }
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      currentFilter = btn.getAttribute("data-filter") || "all";
+      paintFilter();
+      rerender();
+    });
+  });
+
+  function rerender() {
+    const q = qEl?.value || "";
+    const filtered = applyFilter(allRows, currentFilter, today);
+    const searched = applySearch(filtered, q);
+
+    // summary
+    const total = allRows.length;
+    const shown = searched.length;
+    if (summaryEl) {
+      summaryEl.textContent = `Mostrando ${shown} de ${total} • Hoje: ${fmtDateBR(today)}`;
     }
 
-    // render inicial
-    applyFilters();
-
-  } catch (err) {
-    console.error("[reservas] fetch error:", err);
-    hide(stateLoading);
-    hide(stateEmpty);
-    hide(stateList);
-    show(stateError);
-    setMsg("Erro ao carregar. Se persistir, é RLS ou coluna/perm.", "error");
+    renderList(searched, today);
+    if (!total) showState("empty");
+    else showState("list");
   }
-}
 
-/* Events */
-qEl?.addEventListener("input", () => applyFilters());
-fStatusEl?.addEventListener("change", () => applyFilters());
+  // busca
+  qEl?.addEventListener("input", () => rerender());
 
-btnLimpar?.addEventListener("click", (e) => {
-  e.preventDefault();
-  if (qEl) qEl.value = "";
-  if (fStatusEl) fStatusEl.value = "";
-  applyFilters();
-});
+  // load
+  showState("loading");
+  setMsg("");
 
-btnRetry?.addEventListener("click", (e) => {
-  e.preventDefault();
-  boot();
-});
+  const { data, error } = await supabase
+    .from("agenda_reservas")
+    .select("*")
+    .eq("user_id", USER.id)
+    .order("checkin", { ascending: true })
+    .order("created_at", { ascending: false })
+    .limit(300);
 
-boot();
+  if (error) {
+    console.error("[reservas] load error:", error);
+    setMsg("Erro ao carregar reservas. Verifique RLS/policies e tente novamente.", "error");
+    showState("list");
+    const host = document.getElementById("list");
+    if (host) host.innerHTML = `<div class="muted small">Falha ao carregar.</div>`;
+    return;
+  }
+
+  allRows = data || [];
+  if (!allRows.length) {
+    if (summaryEl) summaryEl.textContent = "0 reservas cadastradas.";
+    showState("empty");
+    return;
+  }
+
+  paintFilter();
+  rerender();
+})();
