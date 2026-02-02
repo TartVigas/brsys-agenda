@@ -1,4 +1,4 @@
-// js/hoje.js
+// /js/hoje.js
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
@@ -8,160 +8,169 @@ const elDepartures = document.getElementById("departures");
 const elInhouse = document.getElementById("inhouse");
 
 function setHTML(el, html) {
-  if (!el) return;
-  el.innerHTML = html;
+  if (el) el.innerHTML = html;
 }
 
-function escapeHtml(s) {
-  return (s ?? "").toString()
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
+function esc(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function onlyDigits(v) {
-  return (v || "").toString().replace(/\D/g, "");
-}
-
-function waLink(raw) {
-  const digits = onlyDigits(raw);
-  if (!digits || digits.length < 10) return null;
-
-  // BR 55
-  const ddi = digits.startsWith("55") ? digits : `55${digits}`;
-  return `https://wa.me/${ddi}`;
-}
-
-function todayISO() {
-  // gera YYYY-MM-DD no timezone do navegador (BR ok)
-  const d = new Date();
-  const yyyy = d.getFullYear();
+function ymdLocal(d = new Date()) {
+  // YYYY-MM-DD no fuso local (importante!)
+  const yy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return `${yy}-${mm}-${dd}`;
 }
 
-function formatBRDate(iso) {
-  if (!iso) return "";
-  const p = iso.toString().slice(0, 10);
-  const [y,m,d] = p.split("-");
-  if (!y || !m || !d) return "";
+function fmtYMD(ymd) {
+  // "2026-02-02" -> "02/02/2026"
+  if (!ymd || typeof ymd !== "string" || ymd.length < 10) return "";
+  const [y, m, d] = ymd.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
 }
 
-function renderItem(r, label = "") {
-  const nome = escapeHtml(r.nome_hospede || "(sem nome)");
-  const obs = escapeHtml(r.observacoes || "");
-  const checkin = formatBRDate(r.checkin);
-  const checkout = formatBRDate(r.checkout);
+function waLink(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  // se vier sem DDI, assume BR
+  const full = digits.startsWith("55") ? digits : `55${digits}`;
+  return `https://wa.me/${full}`;
+}
 
-  const whatsUrl = waLink(r.whatsapp);
-  const whatsTxt = r.whatsapp ? escapeHtml(r.whatsapp) : "";
+function reservaCard(r, badge) {
+  const nome = esc(r.nome_hospede || "Sem nome");
+  const wpp = esc(r.whatsapp || "");
+  const inStr = fmtYMD(r.checkin);
+  const outStr = fmtYMD(r.checkout);
+
+  const href = `/reserva.html?id=${encodeURIComponent(r.id)}`;
+  const wa = waLink(r.whatsapp);
 
   return `
-    <div class="item" style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid rgba(255,255,255,.08);">
-      <div style="min-width:220px;">
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <strong>${nome}</strong>
-          ${label ? `<span class="pill">${escapeHtml(label)}</span>` : ""}
+    <div class="card" style="padding:12px;margin:10px 0;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
+        <div>
+          <div style="font-weight:700;">${nome}</div>
+          <div class="muted small">${badge} • ${inStr}${outStr ? ` → ${outStr}` : ""}</div>
+          ${wpp ? `<div class="muted small mono" style="margin-top:4px;">${wpp}</div>` : ""}
         </div>
-        <div class="muted small" style="margin-top:6px;">${checkin || "—"} → ${checkout || "—"}</div>
-        ${whatsTxt ? `<div class="muted small" style="margin-top:4px;">Whats: <span class="mono">${whatsTxt}</span></div>` : ""}
-        ${obs ? `<div class="muted small" style="margin-top:6px;">Obs: ${obs}</div>` : ""}
-      </div>
-
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <a class="btn outline small" href="/reserva.html?id=${encodeURIComponent(r.id)}">Abrir</a>
-        ${whatsUrl ? `<a class="btn outline small" href="${whatsUrl}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+          <a class="btn outline small" href="${href}">Abrir</a>
+          ${wa ? `<a class="btn small" href="${wa}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}
+        </div>
       </div>
     </div>
   `;
 }
 
-function renderEmpty(text) {
-  return `<div class="muted small" style="padding:10px 0;">${escapeHtml(text)}</div>`;
+function emptyBlock(text = "Nada por aqui.") {
+  return `<div class="muted small" style="padding:6px 0;">${esc(text)}</div>`;
 }
 
-async function fetchByDay(userId, isoDay) {
-  // pega um conjunto mínimo de colunas
-  const { data, error } = await supabase
-    .from("agenda_reservas")
-    .select("id, nome_hospede, whatsapp, checkin, checkout, observacoes, status")
-    .eq("user_id", userId)
-    // pega tudo que “encosta” em hoje: checkin <= hoje e checkout >= hoje
-    .lte("checkin", isoDay)
-    .gte("checkout", isoDay)
-    .order("checkin", { ascending: true });
-
-  if (error) throw error;
-  return data || [];
-}
-
-function splitToday(rows, isoDay) {
-  const arrivals = rows.filter(r => (r.checkin || "").toString().slice(0,10) === isoDay);
-  const departures = rows.filter(r => (r.checkout || "").toString().slice(0,10) === isoDay);
-  const inhouse = rows.filter(r => {
-    const ci = (r.checkin || "").toString().slice(0,10);
-    const co = (r.checkout || "").toString().slice(0,10);
-    // ci <= hoje && co > hoje
-    return (ci <= isoDay) && (co > isoDay);
-  });
-
-  return { arrivals, departures, inhouse };
-}
-
-async function boot() {
-  // garante auth (usa teu auth.js exportado)
-  const user = await requireAuth({ redirectTo: "/entrar.html?next=/hoje.html", renderUserInfo: true });
-  if (!user) return;
-
-  // hook do logout já é feito pelo requireAuth (no teu auth.js)
-  const isoDay = todayISO();
+async function loadHoje(user) {
+  const today = ymdLocal(new Date());
 
   setHTML(elSummary, `<span class="muted">Carregando…</span>`);
-  setHTML(elArrivals, "");
-  setHTML(elDepartures, "");
-  setHTML(elInhouse, "");
+  setHTML(elArrivals, emptyBlock("Carregando…"));
+  setHTML(elDepartures, emptyBlock("Carregando…"));
+  setHTML(elInhouse, emptyBlock("Carregando…"));
 
-  try {
-    const rows = await fetchByDay(user.id, isoDay);
-    const { arrivals, departures, inhouse } = splitToday(rows, isoDay);
+  // base select
+  const base = supabase
+    .from("agenda_reservas")
+    .select("id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at, hotel_id")
+    .eq("user_id", user.id);
 
-    // summary
-    setHTML(elSummary, `
-      <div class="row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
-        <span class="pill">Hoje: ${escapeHtml(formatBRDate(isoDay))}</span>
-        <span class="muted small">Chegadas: <strong>${arrivals.length}</strong></span>
-        <span class="muted small">Saídas: <strong>${departures.length}</strong></span>
-        <span class="muted small">Hospedados: <strong>${inhouse.length}</strong></span>
-      </div>
-    `);
+  // 1) Chegadas hoje (checkin = hoje)
+  const qArrivals = base
+    .eq("checkin", today)
+    .order("checkin", { ascending: true })
+    .order("created_at", { ascending: false });
 
-    // sections
-    setHTML(elArrivals, arrivals.length
-      ? arrivals.map(r => renderItem(r, "Chegada")).join("")
-      : renderEmpty("Nenhuma chegada hoje.")
-    );
+  // 2) Saídas hoje (checkout = hoje)
+  const qDepartures = supabase
+    .from("agenda_reservas")
+    .select("id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at, hotel_id")
+    .eq("user_id", user.id)
+    .eq("checkout", today)
+    .order("checkout", { ascending: true })
+    .order("created_at", { ascending: false });
 
-    setHTML(elDepartures, departures.length
-      ? departures.map(r => renderItem(r, "Saída")).join("")
-      : renderEmpty("Nenhuma saída hoje.")
-    );
+  // 3) Hospedados (checkin <= hoje e checkout > hoje)
+  // (quem sai hoje não fica em “hospedados”)
+  const qInhouse = supabase
+    .from("agenda_reservas")
+    .select("id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at, hotel_id")
+    .eq("user_id", user.id)
+    .lte("checkin", today)
+    .gt("checkout", today)
+    .order("checkin", { ascending: true })
+    .order("checkout", { ascending: true });
 
-    setHTML(elInhouse, inhouse.length
-      ? inhouse.map(r => renderItem(r, "Hospedado")).join("")
-      : renderEmpty("Nenhum hóspede hospedado agora.")
-    );
+  const [arrRes, depRes, inhRes] = await Promise.all([qArrivals, qDepartures, qInhouse]);
 
-  } catch (err) {
-    console.error("[hoje] error:", err);
-    setHTML(elSummary, `<span style="color:rgba(255,120,120,.95)">Erro ao carregar (RLS ou conexão).</span>`);
-    setHTML(elArrivals, renderEmpty("—"));
-    setHTML(elDepartures, renderEmpty("—"));
-    setHTML(elInhouse, renderEmpty("—"));
+  if (arrRes.error || depRes.error || inhRes.error) {
+    console.error("[hoje] errors:", arrRes.error, depRes.error, inhRes.error);
+    setHTML(elSummary, `<span style="color:rgba(255,120,120,.95)">Erro ao carregar o dia. Verifique o console.</span>`);
+    setHTML(elArrivals, emptyBlock("Erro ao carregar chegadas."));
+    setHTML(elDepartures, emptyBlock("Erro ao carregar saídas."));
+    setHTML(elInhouse, emptyBlock("Erro ao carregar hospedados."));
+    return;
   }
+
+  const arrivals = arrRes.data || [];
+  const departures = depRes.data || [];
+  const inhouse = inhRes.data || [];
+
+  // resumo
+  const brToday = fmtYMD(today);
+  setHTML(
+    elSummary,
+    `
+    <div class="muted small">
+      <strong>Hoje (${brToday})</strong> •
+      Chegadas: <strong>${arrivals.length}</strong> •
+      Saídas: <strong>${departures.length}</strong> •
+      Hospedados: <strong>${inhouse.length}</strong>
+    </div>
+    `
+  );
+
+  // render listas
+  setHTML(
+    elArrivals,
+    arrivals.length
+      ? arrivals.map(r => reservaCard(r, "Chegada")).join("")
+      : emptyBlock("Nenhuma chegada hoje.")
+  );
+
+  setHTML(
+    elDepartures,
+    departures.length
+      ? departures.map(r => reservaCard(r, "Saída")).join("")
+      : emptyBlock("Nenhuma saída hoje.")
+  );
+
+  setHTML(
+    elInhouse,
+    inhouse.length
+      ? inhouse.map(r => reservaCard(r, "Hospedado")).join("")
+      : emptyBlock("Nenhum hospedado no momento.")
+  );
 }
 
-boot();
+/* ========= Boot ========= */
+(async () => {
+  // Guard (redireciona pro entrar com next=hoje)
+  const user = await requireAuth({ redirectTo: "/entrar.html?next=/hoje.html", renderUserInfo: true });
+
+  if (!user) return; // requireAuth já redirecionou
+
+  await loadHoje(user);
+})();
