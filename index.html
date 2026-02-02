@@ -18,12 +18,14 @@
   <meta property="og:title" content="Agenda BRsys — Agenda online simples para hotéis e pousadas" />
   <meta property="og:description" content="Controle suas reservas sem papel, sem planilhas e sem sistemas complicados." />
   <meta property="og:url" content="https://agenda.brsys.com.br/" />
+  <meta property="og:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
 
   <link rel="preconnect" href="https://wa.me" />
-  <link rel="stylesheet" href="/css/app.css" />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="stylesheet" href="/css/landing.css" />
 
   <!-- JSON-LD: WebApplication -->
   <script type="application/ld+json">
@@ -45,7 +47,6 @@
 </head>
 
 <body>
-
   <!-- Topbar -->
   <header class="top">
     <div class="wrap">
@@ -55,15 +56,17 @@
           <span class="pill">Agenda</span>
         </a>
 
-        <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
-          Falar no WhatsApp
-        </a>
+        <div class="actions" style="margin:0">
+          <a class="btn outline" href="/login.html">Entrar</a>
+          <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
+            WhatsApp
+          </a>
+        </div>
       </div>
     </div>
   </header>
 
   <main class="wrap">
-
     <!-- Hero -->
     <section class="hero" id="topo">
       <div class="heroCard">
@@ -77,13 +80,20 @@
         </p>
 
         <div class="actions">
-          <a class="btn" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
-            Quero conhecer a Agenda BRsys
+          <a class="btn" href="/login.html">
+            Teste grátis agora
+          </a>
+          <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
+            Falar no WhatsApp
           </a>
           <a class="btn outline" href="#como-funciona">
             Ver como funciona
           </a>
         </div>
+
+        <p class="sub" style="margin-top:10px;font-size:14px;">
+          <strong>Sem cartão.</strong> Você entra com e-mail e recebe um link seguro (Magic Link).
+        </p>
       </div>
     </section>
 
@@ -110,10 +120,10 @@
     <section class="section" id="como-funciona">
       <h2>O que a Agenda BRsys faz</h2>
       <ul>
-        <li><strong>Agenda de reservas por data</strong></li>
-        <li><strong>Organização simples por quartos</strong></li>
-        <li><strong>Cadastro rápido de hóspedes</strong></li>
-        <li><strong>Acesso por celular ou computador</strong></li>
+        <li><strong>Cadastro rápido de hóspedes</strong> (nome + WhatsApp + datas)</li>
+        <li><strong>Lista simples de reservas</strong> (ordem por check-in)</li>
+        <li><strong>Ação direta</strong>: abrir conversa no WhatsApp do hóspede</li>
+        <li><strong>Acesso no celular ou PC</strong> (sem instalar nada)</li>
       </ul>
     </section>
 
@@ -128,16 +138,16 @@
     <!-- CTA Final -->
     <section class="section" id="contato">
       <div class="heroCard" style="padding:18px;border-radius:18px;">
-        <h2>Quer ver se a Agenda BRsys serve para sua hospedagem?</h2>
+        <h2>Quer validar em 2 minutos?</h2>
         <p class="sub">
-          Me chama no WhatsApp e eu te digo em 2 minutos se faz sentido.
+          Me chama no WhatsApp e eu te digo se serve para sua hospedagem.
         </p>
         <div class="actions">
           <a class="btn" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
-            Quero testar a Agenda BRsys
+            Falar agora
           </a>
-          <a class="btn outline" href="https://brsys.com.br/" target="_blank" rel="noopener noreferrer">
-            Voltar ao site BRsys
+          <a class="btn outline" href="/login.html">
+            Testar grátis
           </a>
         </div>
       </div>
@@ -147,21 +157,17 @@
       <div class="mini">
         <div>© <span id="y"></span> BRsys • agenda.brsys.com.br</div>
         <div>
+          <a href="/login.html">Entrar</a>
+          <span style="opacity:.35;"> • </span>
           <a href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">WhatsApp</a>
           <span style="opacity:.35;"> • </span>
           <a href="https://brsys.com.br/" target="_blank" rel="noopener noreferrer">brsys.com.br</a>
         </div>
       </div>
     </footer>
-
   </main>
 
-  <script>
-    document.getElementById("y").textContent = new Date().getFullYear();
-  </script>
-
-  <!-- ✅ JS correto da landing (NÃO usa Supabase) -->
+  <script>document.getElementById("y").textContent = new Date().getFullYear();</script>
   <script src="/js/landing.js" defer></script>
-
 </body>
 </html>
