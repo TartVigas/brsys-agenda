@@ -1,100 +1,118 @@
 import { supabase } from "./supabase.js";
 
-const elEmail = document.getElementById("userEmail");
-const btnLogout = document.getElementById("logout");
+/* ========= Utils Datas ========= */
+function brToISO(br){
+  // DD/MM/AAAA → YYYY-MM-DD
+  const [d,m,y] = br.split("/");
+  return `${y}-${m}-${d}`;
+}
+
+function isoToBR(iso){
+  const [y,m,d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/* ========= Elements ========= */
+const modal = document.getElementById("modalBackdrop");
+const form = document.getElementById("formReserva");
+const btnCancel = document.getElementById("cancelar");
 
 const stateLoading = document.getElementById("stateLoading");
 const stateEmpty   = document.getElementById("stateEmpty");
 const stateList    = document.getElementById("stateList");
+const listEl       = document.getElementById("list");
 
-const btnNew  = document.getElementById("btnNew");
-const btnNew2 = document.getElementById("btnNew2");
-const listEl  = document.getElementById("list");
-
+/* ========= State ========= */
 function show(which){
-  if (!stateLoading || !stateEmpty || !stateList) return;
-
-  stateLoading.style.display = (which === "loading") ? "" : "none";
-  stateEmpty.style.display   = (which === "empty")   ? "" : "none";
-  stateList.style.display    = (which === "list")    ? "" : "none";
+  stateLoading.style.display = which === "loading" ? "" : "none";
+  stateEmpty.style.display   = which === "empty" ? "" : "none";
+  stateList.style.display    = which === "list" ? "" : "none";
 }
 
-function escapeHtml(s=""){
-  return s.replace(/[&<>"']/g, m => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[m]));
-}
+/* ========= Modal ========= */
+function openModal(){ modal.classList.remove("hidden"); }
+function closeModal(){ modal.classList.add("hidden"); form.reset(); }
 
-async function loadUser(){
-  const { data: { user }, error } = await supabase.auth.getUser();
+document.getElementById("btnNew")?.addEventListener("click", openModal);
+document.getElementById("btnNew2")?.addEventListener("click", openModal);
+btnCancel?.addEventListener("click", closeModal);
 
-  if (error) {
-    console.error("[app] getUser error:", error);
-    return null;
-  }
-  return user ?? null;
-}
+/* ========= Load Reservas ========= */
+async function loadReservas(){
+  show("loading");
 
-// V1: ainda sem banco de reservas
-// Deixa mock só pra não parecer vazio quando você quiser testar
-async function loadReservasMock(){
-  return []; // quando tiver supabase table, troca aqui pela query real
-}
+  const { data, error } = await supabase
+    .from("reservas")
+    .select("*")
+    .order("checkin", { ascending: true });
 
-function renderList(items){
-  if (!listEl) return;
-
-  if (!items.length){
+  if (error){
+    console.error(error);
     show("empty");
     return;
   }
 
-  show("list");
-  listEl.innerHTML = items.map(r => `
-    <article class="item">
-      <div class="item-top">
-        <strong>${escapeHtml(r.nome)}</strong>
-        <span class="pill">${escapeHtml(r.status ?? "ativa")}</span>
-      </div>
-      <div class="muted small">
-        WhatsApp: ${escapeHtml(r.whatsapp ?? "-")} •
-        ${escapeHtml(r.checkin ?? "-")} → ${escapeHtml(r.checkout ?? "-")}
-      </div>
-    </article>
-  `).join("");
-}
-
-function bindUI(){
-  const openNew = () => {
-    // V1: placeholder
-    alert("V1: em breve o modal de nova reserva 👀");
-  };
-
-  btnNew?.addEventListener("click", openNew);
-  btnNew2?.addEventListener("click", openNew);
-
-  btnLogout?.addEventListener("click", async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/entrar.html";
-  });
-}
-
-async function boot(){
-  show("loading");
-  bindUI();
-
-  const user = await loadUser();
-
-  // fallback: se por algum motivo o auth.js não redirecionou
-  if (!user){
-    window.location.href = "/entrar.html";
+  if (!data.length){
+    show("empty");
     return;
   }
 
-  if (elEmail) elEmail.textContent = user.email ?? "(sem e-mail)";
+  listEl.innerHTML = data.map(r => `
+    <article class="item">
+      <strong>${r.nome}</strong>
+      <div class="muted small">
+        ${isoToBR(r.checkin)} → ${isoToBR(r.checkout)}
+        ${r.whatsapp ? " • " + r.whatsapp : ""}
+      </div>
+    </article>
+  `).join("");
 
-  const reservas = await loadReservasMock();
-  renderList(reservas);
+  show("list");
 }
 
-boot();
+/* ========= Submit ========= */
+form.addEventListener("submit", async (e)=>{
+  e.preventDefault();
+
+  const nome = form.nome.value.trim();
+  const whatsapp = form.whatsapp.value.trim();
+  const checkinBR = form.checkin.value;
+  const checkoutBR = form.checkout.value;
+  const obs = form.obs.value.trim();
+
+  if (!nome || !checkinBR || !checkoutBR){
+    alert("Preencha nome e datas.");
+    return;
+  }
+
+  const checkin = brToISO(checkinBR);
+  const checkout = brToISO(checkoutBR);
+
+  if (checkout < checkin){
+    alert("Check-out não pode ser antes do check-in.");
+    return;
+  }
+
+  const { data: userData } = await supabase.auth.getUser();
+
+  const { error } = await supabase.from("reservas").insert({
+    user_id: userData.user.id,
+    nome,
+    whatsapp,
+    checkin,
+    checkout,
+    obs
+  });
+
+  if (error){
+    alert("Erro ao salvar reserva.");
+    console.error(error);
+    return;
+  }
+
+  closeModal();
+  loadReservas();
+});
+
+/* ========= Boot ========= */
+loadReservas();
