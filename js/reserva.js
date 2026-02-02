@@ -1,4 +1,4 @@
-// js/reserva.js
+// /js/reserva.js
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
@@ -12,7 +12,6 @@ const whatsEl = document.getElementById("whatsapp");
 const checkinEl = document.getElementById("checkin");
 const checkoutEl = document.getElementById("checkout");
 const obsEl = document.getElementById("obs");
-const statusEl = document.getElementById("status");
 
 const metaEl = document.getElementById("meta");
 const msgEl = document.getElementById("msg");
@@ -20,18 +19,20 @@ const msgEl = document.getElementById("msg");
 const btnSalvar = document.getElementById("btnSalvar");
 const btnExcluir = document.getElementById("btnExcluir");
 const btnWhats = document.getElementById("btnWhats");
-const btnBack = document.getElementById("btnBack");
-const btnBackNF = document.getElementById("btnBackNF");
 
 let USER = null;
 let RESERVA_ID = null;
+let original = null;
 let saving = false;
 let deleting = false;
 
-function show(el){ if (el) el.style.display = ""; }
-function hide(el){ if (el) el.style.display = "none"; }
+function show(which) {
+  if (stateLoading) stateLoading.style.display = which === "loading" ? "" : "none";
+  if (stateNotFound) stateNotFound.style.display = which === "notfound" ? "" : "none";
+  if (stateForm) stateForm.style.display = which === "form" ? "" : "none";
+}
 
-function setMsg(text, type="info"){
+function setMsg(text, type = "info") {
   if (!msgEl) return;
   msgEl.textContent = text || "";
   msgEl.style.color =
@@ -40,344 +41,248 @@ function setMsg(text, type="info"){
                        "rgba(255,255,255,.70)";
 }
 
-function setLoadingSave(isLoading){
-  if (!btnSalvar) return;
-  btnSalvar.disabled = !!isLoading;
-  btnSalvar.style.opacity = isLoading ? "0.78" : "1";
-  btnSalvar.textContent = isLoading ? "Salvando..." : "Salvar alterações";
+function esc(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
-function setLoadingDelete(isLoading){
-  if (!btnExcluir) return;
-  btnExcluir.disabled = !!isLoading;
-  btnExcluir.style.opacity = isLoading ? "0.78" : "1";
-  btnExcluir.textContent = isLoading ? "Excluindo..." : "Excluir";
-}
-
-function onlyDigits(v){ return (v||"").toString().replace(/\D/g,""); }
-
-function formatPhoneBR(v){
-  const d = onlyDigits(v).slice(0, 11);
-  if (!d) return "";
-  if (d.length <= 2) return `(${d}`;
-  if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
-  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
-}
-
-function maskDateBR(v){
-  const d = onlyDigits(v).slice(0, 8);
-  if (!d) return "";
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
-  return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
-}
-
-function isValidDateBR(s){
-  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
-  const [dd, mm, yyyy] = s.split("/").map(Number);
-  if (yyyy < 1900 || yyyy > 2100) return false;
-  if (mm < 1 || mm > 12) return false;
-  const maxDay = new Date(yyyy, mm, 0).getDate();
-  return dd >= 1 && dd <= maxDay;
-}
-
-function brToISO(s){
-  const [dd, mm, yyyy] = s.split("/");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function isoToBR(iso){
-  if (!iso) return "";
-  const part = iso.toString().slice(0, 10);
-  const [y,m,d] = part.split("-");
-  if (!y || !m || !d) return "";
-  return `${d}/${m}/${y}`;
-}
-
-function compareISO(a,b){
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
-}
-
-function getParam(name){
+function getId() {
   const p = new URLSearchParams(window.location.search);
-  return p.get(name);
+  return p.get("id");
 }
 
-function getNext(){
-  return getParam("next") || "/reservas.html";
+function ymd(isoOrDate) {
+  // garante YYYY-MM-DD (o input date usa isso)
+  if (!isoOrDate) return "";
+  if (typeof isoOrDate === "string") return isoOrDate.slice(0, 10);
+  try {
+    const d = new Date(isoOrDate);
+    const yy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yy}-${mm}-${dd}`;
+  } catch {
+    return "";
+  }
 }
 
-function setBackLinks(){
-  const next = getNext();
-  if (btnBack) btnBack.href = next;
-  if (btnBackNF) btnBackNF.href = next;
+function waLink(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  const full = digits.startsWith("55") ? digits : `55${digits}`;
+  return `https://wa.me/${full}`;
 }
 
-function waLink(raw){
-  const digits = onlyDigits(raw);
-  if (!digits || digits.length < 10) return null;
-  const ddi = digits.startsWith("55") ? digits : `55${digits}`;
-  return `https://wa.me/${ddi}`;
+function currentForm() {
+  return {
+    nome_hospede: (nomeEl?.value || "").trim(),
+    whatsapp: (whatsEl?.value || "").trim(),
+    checkin: (checkinEl?.value || "").trim(),
+    checkout: (checkoutEl?.value || "").trim(),
+    observacoes: (obsEl?.value || "").trim(),
+  };
 }
 
-function updateWhatsButton(raw){
-  const url = waLink(raw);
-  if (!btnWhats) return;
+function isDirty() {
+  if (!original) return false;
+  const now = currentForm();
+  return (
+    now.nome_hospede !== (original.nome_hospede || "") ||
+    now.whatsapp !== (original.whatsapp || "") ||
+    now.checkin !== ymd(original.checkin) ||
+    now.checkout !== ymd(original.checkout) ||
+    now.observacoes !== (original.observacoes || "")
+  );
+}
 
-  if (!url) {
-    hide(btnWhats);
-    btnWhats.href = "#";
+function refreshUI() {
+  const dirty = isDirty();
+  if (btnSalvar) btnSalvar.disabled = !dirty || saving;
+
+  const wa = waLink(whatsEl?.value || "");
+  if (btnWhats) {
+    if (wa) {
+      btnWhats.style.display = "";
+      btnWhats.href = wa;
+    } else {
+      btnWhats.style.display = "none";
+      btnWhats.href = "#";
+    }
+  }
+}
+
+function bindChangeEvents() {
+  const onAny = () => {
+    if (isDirty()) setMsg("Alterações pendentes. Clique em Salvar.", "info");
+    else setMsg("", "info");
+    refreshUI();
+  };
+
+  [nomeEl, whatsEl, checkinEl, checkoutEl, obsEl].forEach((el) => {
+    el?.addEventListener("input", onAny);
+    el?.addEventListener("change", onAny);
+  });
+}
+
+function fillForm(row) {
+  if (!row) return;
+  original = row;
+
+  if (nomeEl) nomeEl.value = row.nome_hospede || "";
+  if (whatsEl) whatsEl.value = row.whatsapp || "";
+  if (checkinEl) checkinEl.value = ymd(row.checkin);
+  if (checkoutEl) checkoutEl.value = ymd(row.checkout);
+  if (obsEl) obsEl.value = row.observacoes || "";
+
+  if (metaEl) {
+    metaEl.innerHTML = `ID: <span class="mono">${esc(row.id)}</span> • Criada em: <span class="mono">${esc(String(row.created_at || "").slice(0,19).replace("T"," "))}</span>`;
+  }
+
+  setMsg("", "info");
+  refreshUI();
+}
+
+async function fetchReserva() {
+  show("loading");
+  setMsg("", "info");
+
+  const { data, error } = await supabase
+    .from("agenda_reservas")
+    .select("id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at, updated_at")
+    .eq("id", RESERVA_ID)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[reserva] fetch error:", error);
+    show("notfound");
+    return null;
+  }
+
+  if (!data) {
+    show("notfound");
+    return null;
+  }
+
+  show("form");
+  fillForm(data);
+  return data;
+}
+
+function validateBasic(payload) {
+  if (!payload.nome_hospede) return "Digite o nome do hóspede.";
+  if (!payload.checkin) return "Informe a data de check-in.";
+  if (!payload.checkout) return "Informe a data de check-out.";
+
+  // check-out não pode ser <= check-in
+  if (payload.checkout <= payload.checkin) {
+    return "Check-out deve ser depois do check-in.";
+  }
+
+  return null;
+}
+
+async function save() {
+  if (saving) return;
+  if (!RESERVA_ID) return;
+
+  const payload = currentForm();
+  const err = validateBasic(payload);
+  if (err) {
+    setMsg(err, "error");
     return;
   }
 
-  btnWhats.href = url;
-  show(btnWhats);
-}
+  saving = true;
+  refreshUI();
+  setMsg("Salvando…", "info");
 
-function bindMasks(){
-  whatsEl?.addEventListener("input", () => {
-    whatsEl.value = formatPhoneBR(whatsEl.value);
-    updateWhatsButton(whatsEl.value);
-  });
+  const { data, error } = await supabase
+    .from("agenda_reservas")
+    .update({
+      nome_hospede: payload.nome_hospede,
+      whatsapp: payload.whatsapp || null,
+      checkin: payload.checkin,
+      checkout: payload.checkout,
+      observacoes: payload.observacoes || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", RESERVA_ID)
+    .select("id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at, updated_at")
+    .maybeSingle();
 
-  checkinEl?.addEventListener("input", () => {
-    checkinEl.value = maskDateBR(checkinEl.value);
-  });
+  saving = false;
 
-  checkoutEl?.addEventListener("input", () => {
-    checkoutEl.value = maskDateBR(checkoutEl.value);
-  });
-}
-
-async function fetchReserva(id){
-  // tenta com status
-  try {
-    const { data, error } = await supabase
-      .from("agenda_reservas")
-      .select("id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, status, created_at")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (error) throw error;
-    return data;
-  } catch (e) {
-    // fallback sem status
-    const { data, error } = await supabase
-      .from("agenda_reservas")
-      .select("id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (error) throw error;
-    return data ? { ...data, status: "pendente" } : null;
-  }
-}
-
-function renderReserva(r){
-  if (!r) return;
-
-  if (nomeEl) nomeEl.value = r.nome_hospede || "";
-  if (whatsEl) whatsEl.value = formatPhoneBR(r.whatsapp || "");
-  if (checkinEl) checkinEl.value = isoToBR(r.checkin);
-  if (checkoutEl) checkoutEl.value = isoToBR(r.checkout);
-  if (obsEl) obsEl.value = r.observacoes || "";
-
-  if (statusEl) {
-    const st = (r.status || "pendente").toString().trim().toLowerCase();
-    statusEl.value = ["pendente","confirmada","cancelada"].includes(st) ? st : "pendente";
+  if (error) {
+    console.error("[reserva] update error:", error);
+    setMsg("Erro ao salvar. Tente novamente.", "error");
+    refreshUI();
+    return;
   }
 
-  updateWhatsButton(r.whatsapp || "");
-
-  if (metaEl) {
-    const created = r.created_at ? new Date(r.created_at) : null;
-    metaEl.textContent = created ? `Criada em ${created.toLocaleString("pt-BR")}` : "";
-  }
+  // atualiza o "original" pra voltar a ficar limpo
+  fillForm(data);
+  setMsg("Salvo com sucesso ✅", "ok");
+  refreshUI();
 }
 
-async function updateReserva(id, payload){
-  // tenta com status
-  try {
-    const { error } = await supabase
-      .from("agenda_reservas")
-      .update(payload)
-      .eq("id", id);
+async function remove() {
+  if (deleting) return;
+  if (!RESERVA_ID) return;
 
-    if (error) throw error;
-    return true;
-  } catch (e) {
-    // fallback sem status
-    const clone = { ...payload };
-    delete clone.status;
+  const ok = confirm("Excluir esta reserva? Essa ação não pode ser desfeita.");
+  if (!ok) return;
 
-    const { error } = await supabase
-      .from("agenda_reservas")
-      .update(clone)
-      .eq("id", id);
+  deleting = true;
+  if (btnExcluir) btnExcluir.disabled = true;
+  setMsg("Excluindo…", "info");
 
-    if (error) throw error;
-    return true;
-  }
-}
-
-async function deleteReserva(id){
   const { error } = await supabase
     .from("agenda_reservas")
     .delete()
-    .eq("id", id);
+    .eq("id", RESERVA_ID);
 
-  if (error) throw error;
+  deleting = false;
+  if (btnExcluir) btnExcluir.disabled = false;
+
+  if (error) {
+    console.error("[reserva] delete error:", error);
+    setMsg("Erro ao excluir. Tente novamente.", "error");
+    return;
+  }
+
+  // volta pra lista
+  window.location.replace("/reservas.html");
 }
 
-async function onSubmit(e){
-  e.preventDefault();
-  if (saving) return;
-
-  const nome = (nomeEl?.value || "").trim();
-  const whatsMasked = (whatsEl?.value || "").trim();
-  const whatsDigits = onlyDigits(whatsMasked);
-  const checkinBR = (checkinEl?.value || "").trim();
-  const checkoutBR = (checkoutEl?.value || "").trim();
-  const obs = (obsEl?.value || "").trim();
-  const st = (statusEl?.value || "pendente").trim().toLowerCase();
-
-  if (!nome) {
-    setMsg("Informe o nome do hóspede.", "error");
-    nomeEl?.focus();
-    return;
-  }
-
-  if (!isValidDateBR(checkinBR)) {
-    setMsg("Check-in inválido. Use DD/MM/AAAA.", "error");
-    checkinEl?.focus();
-    return;
-  }
-
-  if (!isValidDateBR(checkoutBR)) {
-    setMsg("Check-out inválido. Use DD/MM/AAAA.", "error");
-    checkoutEl?.focus();
-    return;
-  }
-
-  const checkin = brToISO(checkinBR);
-  const checkout = brToISO(checkoutBR);
-
-  if (compareISO(checkout, checkin) <= 0) {
-    setMsg("Check-out precisa ser depois do check-in.", "error");
-    checkoutEl?.focus();
-    return;
-  }
-
-  if (whatsDigits && whatsDigits.length < 10) {
-    setMsg("WhatsApp incompleto. Inclua DDD.", "error");
-    whatsEl?.focus();
-    return;
-  }
-
-  const payload = {
-    nome_hospede: nome,
-    whatsapp: whatsDigits ? whatsDigits : null,
-    checkin,
-    checkout,
-    observacoes: obs ? obs : null,
-    status: st || "pendente",
-  };
-
-  try {
-    saving = true;
-    setLoadingSave(true);
-    setMsg("Salvando...", "info");
-
-    await updateReserva(RESERVA_ID, payload);
-
-    setMsg("Salvo ✅", "ok");
-    updateWhatsButton(whatsDigits);
-
-  } catch (err) {
-    console.error("[reserva] update error:", err);
-    setMsg("Erro ao salvar. Verifique RLS/colunas e tente novamente.", "error");
-  } finally {
-    saving = false;
-    setLoadingSave(false);
-  }
-}
-
-async function onDelete(){
-  if (deleting) return;
-
-  const ok = window.confirm("Excluir esta reserva? Essa ação não pode ser desfeita.");
-  if (!ok) return;
-
-  try {
-    deleting = true;
-    setLoadingDelete(true);
-    setMsg("Excluindo...", "info");
-
-    await deleteReserva(RESERVA_ID);
-
-    setMsg("Excluída ✅ Voltando…", "ok");
-    setTimeout(() => window.location.replace(getNext()), 350);
-
-  } catch (err) {
-    console.error("[reserva] delete error:", err);
-    setMsg("Erro ao excluir. Verifique RLS e tente novamente.", "error");
-  } finally {
-    deleting = false;
-    setLoadingDelete(false);
-  }
-}
-
-async function boot(){
-  setBackLinks();
-
+/* ========= Boot ========= */
+(async () => {
   USER = await requireAuth({
-    redirectTo: "/entrar.html?next=" + encodeURIComponent(window.location.pathname + window.location.search),
-    renderUserInfo: false
+    redirectTo: "/entrar.html?next=/reserva.html",
+    renderUserInfo: false,
   });
+
   if (!USER) return;
 
-  RESERVA_ID = getParam("id");
+  RESERVA_ID = getId();
   if (!RESERVA_ID) {
-    hide(stateLoading);
-    hide(stateForm);
-    show(stateNotFound);
+    show("notfound");
     return;
   }
 
-  bindMasks();
+  bindChangeEvents();
 
-  try {
-    show(stateLoading);
-    hide(stateNotFound);
-    hide(stateForm);
+  form?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await save();
+  });
 
-    const r = await fetchReserva(RESERVA_ID);
+  btnExcluir?.addEventListener("click", async () => {
+    await remove();
+  });
 
-    if (!r) {
-      hide(stateLoading);
-      hide(stateForm);
-      show(stateNotFound);
-      return;
-    }
-
-    renderReserva(r);
-
-    hide(stateLoading);
-    hide(stateNotFound);
-    show(stateForm);
-
-    form?.addEventListener("submit", onSubmit);
-    btnExcluir?.addEventListener("click", onDelete);
-
-    setMsg("Edite e salve. (V1)", "info");
-
-  } catch (err) {
-    console.error("[reserva] fetch error:", err);
-    hide(stateLoading);
-    hide(stateForm);
-    show(stateNotFound);
-  }
-}
-
-boot();
+  await fetchReserva();
+})();
