@@ -38,3 +38,13 @@
 
 })();
 
+import { supabase } from "./supabase.js";
+
+const { data: { user } } = await supabase.auth.getUser();
+
+const el = document.getElementById("userInfo");
+
+el.innerHTML = `
+  <strong>Usuário:</strong><br>
+  ${user.email}
+`;
