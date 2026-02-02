@@ -1,509 +1,313 @@
 /* =========================================================
-   BRsys — app.css (BASE GLOBAL)
-   Fundação visual do domínio (BRsys)
-   NÃO personalizar cliente aqui (isso é theme.css)
-========================================================= */
+   BRsys Agenda — app.css (Landing V1)
+   Padrão: darkclean teal • mobile-first • SaaS
+   ========================================================= */
 
-/* ==============================
-   VARIÁVEIS BASE (DEFAULT BRsys)
-============================== */
-:root{
-  --bg:#081316;
-  --panel: rgba(255,255,255,.06);
-  --panel2: rgba(255,255,255,.09);
+/* -------------------------
+   Reset básico
+------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-  --text: rgba(255,255,255,.92);
-  --muted: rgba(255,255,255,.72);
-  --line: rgba(255,255,255,.14);
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
 
-  --brand:#19d6c6;
-  --brand2:#0b8f86;
+body {
+  margin: 0;
+}
 
-  --shadow: 0 24px 70px rgba(0,0,0,.55);
-  --shadow2: 0 18px 55px rgba(0,0,0,.35);
+/* -------------------------
+   Variáveis (tema)
+------------------------- */
+:root {
+  --bg: #070c0c;
+  --panel: rgba(255, 255, 255, 0.04);
+  --panel-strong: rgba(0, 0, 0, 0.55);
+  --line: rgba(255, 255, 255, 0.10);
 
-  --r: 18px;
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.70);
+
+  --brand: #1fe3c0;
+  --brand-2: #66f2da;
+
+  --shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 12px 40px rgba(0, 0, 0, 0.25);
+
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 12px;
+
   --max: 1120px;
 }
 
-/* ==============================
-   RESET / BASE
-============================== */
-*{ box-sizing:border-box; }
-html{ scroll-behavior:smooth; }
-body{
-  margin:0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Helvetica Neue", Helvetica;
+/* -------------------------
+   Base do site
+------------------------- */
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background:
-    radial-gradient(1200px 600px at 20% 0%, rgba(25,214,198,.16), transparent 55%),
-    radial-gradient(900px 500px at 80% 30%, rgba(25,214,198,.12), transparent 60%),
+    radial-gradient(800px 500px at 20% 10%, rgba(31, 227, 192, 0.18), transparent 55%),
+    radial-gradient(900px 520px at 80% 40%, rgba(102, 242, 218, 0.10), transparent 60%),
     var(--bg);
   color: var(--text);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
-a{ color:inherit; text-decoration:none; }
-img{ max-width:100%; display:block; }
-ul{ margin: 0; padding-left: 18px; }
-li{ margin: 6px 0; }
-hr{ border:0; height:1px; background: rgba(255,255,255,.12); }
 
-/* ==============================
-   LAYOUT / HELPERS
-============================== */
-.wrap{
+/* -------------------------
+   Layout helpers
+------------------------- */
+.wrap {
   max-width: var(--max);
-  margin:0 auto;
-  padding: 18px;
+  margin: 0 auto;
+  padding: 0 18px;
 }
-.section{ padding: 26px 0 8px; }
 
-.grid{
-  display:grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap:14px;
+.section {
+  margin: 12px 0 32px;
 }
-.grid > *{ min-width:0; } /* evita overflow em grid */
 
-.col4{ grid-column: span 4; }
-.col6{ grid-column: span 6; }
-.col12{ grid-column: span 12; }
-
-/* Tipografia básica */
-h1{
-  margin:14px 0 10px;
-  font-size: clamp(28px, 3.4vw, 46px);
-  line-height:1.06;
-}
-h2{ margin:0 0 10px; font-size: 22px; }
-p{ margin:0; }
-.lead{
-  margin:0 0 16px;
-  color: var(--muted);
-  line-height:1.6;
-  font-size:16px;
-}
-.sub{ margin:0 0 16px; color: rgba(255,255,255,.74); }
-.note{ color: rgba(255,255,255,.62); font-size:13px; line-height:1.55; }
-
-/* ==============================
-   HEADER / TOPBAR
-============================== */
-.top{
+/* -------------------------
+   Topbar
+------------------------- */
+.top {
   position: sticky;
-  top:0;
-  z-index:50;
+  top: 0;
+  z-index: 50;
+  background: rgba(7, 12, 12, 0.65);
   backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  background: rgba(8,19,22,.62);
-  border-bottom:1px solid var(--line);
-}
-.topin{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  padding:12px 18px;
-}
-.brand{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  font-weight:900;
-}
-.brand img{
-  width:34px;
-  height:34px;
-  border-radius:10px;
-}
-.nav{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  flex-wrap:wrap;
-  justify-content:flex-end;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* ==============================
-   BOTÕES / PILLS
-============================== */
-.pill{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:10px;
-  padding:10px 14px;
-  border-radius:999px;
-  background: rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.12);
-  font-weight:800;
-  transition: transform .15s ease, background .15s ease, border-color .15s ease;
-  white-space:nowrap;
-  min-width: 0;
-}
-.pill:hover{
-  transform: translateY(-1px);
-  background: rgba(255,255,255,.10);
-}
-.pill:active{
-  transform: translateY(0px);
-}
-.pill.primary{
-  background: linear-gradient(135deg, rgba(25,214,198,.25), rgba(25,214,198,.08));
-  border-color: rgba(25,214,198,.35);
-  font-weight:900;
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
 }
 
-/* ==============================
-   HERO (PADRÃO GLOBAL)
-============================== */
-.hero{
-  margin-top:18px;
-  border-radius: calc(var(--r) + 10px);
-  overflow:hidden;
-  border:1px solid rgba(255,255,255,.12);
-  box-shadow: var(--shadow);
-  background:#000;
-}
-.hero .bg{
-  min-height:460px;
-  padding:26px;
-  display:flex;
-  align-items:flex-end;
-  background-image:
-    linear-gradient(90deg, rgba(8,19,22,.92) 0%, rgba(8,19,22,.82) 45%, rgba(8,19,22,.35) 78%, rgba(8,19,22,.10) 100%),
-    url("/img/hero.jpg");
-  background-size:cover;
-  background-position:center;
-}
-.hero .content{ max-width:920px; }
-
-.kicker{
-  display:inline-flex;
-  align-items:center;
-  gap:10px;
-  padding:8px 12px;
-  border-radius:999px;
-  background: rgba(25,214,198,.10);
-  border:1px solid rgba(25,214,198,.25);
-  font-size:13px;
-  font-weight:900;
-}
-
-.ctaRow{
-  display:flex;
-  flex-wrap:wrap;
-  gap:10px;
-  align-items:center;
-}
-
-/* ==============================
-   CARDS / PICKS (GENÉRICOS)
-============================== */
-.card{
-  border-radius: var(--r);
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  box-shadow: var(--shadow2);
-  padding:16px;
-  min-width:0;
-}
-.card strong{
-  display:block;
-  margin-bottom:8px;
-  font-weight:900;
-}
-.card p{
-  margin:0;
-  color: var(--muted);
-  line-height:1.55;
-}
-
-/* Pick (cards com imagem/overlay) */
-.pick{
-  border-radius: var(--r);
-  overflow:hidden;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  box-shadow: var(--shadow2);
-  transition: transform .15s ease, border-color .15s ease, background .15s ease;
-  position:relative;
-  isolation:isolate;
-  min-height:220px;
-  min-width:0;
-}
-.pick:hover{
-  transform: translateY(-2px);
-  border-color: rgba(25,214,198,.28);
-  background: rgba(255,255,255,.08);
-}
-.pick .img{
-  position:absolute;
-  inset:0;
-  background-size:cover;
-  background-position:center;
-  z-index:-2;
-}
-.pick .shade{
-  position:absolute;
-  inset:0;
-  background:
-    linear-gradient(90deg, rgba(8,19,22,.86) 0%, rgba(8,19,22,.72) 55%, rgba(8,19,22,.35) 100%),
-    radial-gradient(700px 260px at 0% 100%, rgba(25,214,198,.18), transparent 60%);
-  z-index:-1;
-}
-.pick .inner{
-  padding:16px;
-  display:flex;
-  flex-direction:column;
-  height:100%;
-  gap:10px;
-}
-.badge{
-  display:inline-flex;
-  gap:8px;
-  padding:7px 10px;
-  border-radius:999px;
-  background: rgba(25,214,198,.10);
-  border:1px solid rgba(25,214,198,.24);
-  font-size:12px;
-  font-weight:900;
-}
-.title{ font-size:18px; font-weight:900; margin:0; }
-.desc{ margin:0; color: var(--muted); line-height:1.5; }
-
-.meta{
-  margin-top:auto;
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  align-items:center;
-  font-size:13px;
-}
-.chip{
-  padding:7px 10px;
-  border-radius:999px;
-  background: rgba(255,255,255,.08);
-  border:1px solid rgba(255,255,255,.12);
-  white-space:nowrap;
-}
-.go{
-  margin-left:auto;
-  padding:8px 12px;
-  border-radius:12px;
-  background: linear-gradient(135deg, rgba(25,214,198,.22), rgba(25,214,198,.08));
-  border:1px solid rgba(25,214,198,.28);
-  font-weight:900;
-  white-space:nowrap;
-}
-
-/* ==============================
-   VALORES (CARD ÚNICO)
-   (se usar o bloco novo do HTML)
-============================== */
-.card.single{ padding:18px; }
-
-.priceTop{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom:12px;
-}
-.tag{
-  font-size:12px;
-  color: rgba(255,255,255,.70);
-  border:1px solid rgba(255,255,255,.14);
-  padding:8px 10px;
-  border-radius:999px;
-  background: rgba(0,0,0,.12);
-  white-space:nowrap;
-}
-
-.priceRows{
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-}
-
-.row{
-  display:grid;
-  grid-template-columns: 1fr auto;
-  gap:12px;
-  padding:14px;
-  border-radius:16px;
-  background: rgba(0,0,0,.18);
-  border:1px solid rgba(255,255,255,.10);
-  min-width:0;
-}
-.rowL{ min-width:0; }
-.rowL .ttl{ font-weight:900; margin-bottom:6px; }
-.rowL .txt{ color: rgba(255,255,255,.72); line-height:1.55; }
-.rowR{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  align-items:flex-end;
-  justify-content:center;
-  min-width: 220px;
-}
-.price{ font-weight:1000; font-size:18px; }
-
-.line{
-  border:0;
-  height:1px;
-  background: rgba(255,255,255,.12);
-  margin:16px 0;
-}
-
-.recGrid{
-  display:grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap:12px;
-}
-.rec{
-  grid-column: span 4;
-  padding:14px;
-  border-radius:16px;
-  background: rgba(0,0,0,.18);
-  border:1px solid rgba(255,255,255,.10);
-  min-width:0;
-}
-.rec .ttl{ font-weight:900; margin-bottom:6px; }
-.rec .txt{ color: rgba(255,255,255,.72); line-height:1.55; margin-bottom:10px; }
-.priceSm{ font-weight:1000; margin-bottom:10px; }
-.miniList{
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  color: rgba(255,255,255,.75);
-  font-size:13px;
-}
-
-/* =========================================================
-   FIX GRID-SPAN (necessário para /solucoes/)
-   Mantém o comportamento antigo: 2 colunas pra .card e 3 pra .pick
-========================================================= */
-
-.card{ grid-column: span 6; }
-.pick{ grid-column: span 4; }
-
-/* quando você quiser card único (ex: valores), força 12 */
-.card.single{ grid-column: span 12; }
-
-/* ==============================
-   FOOTER
-============================== */
-footer{
-  border-top:1px solid rgba(255,255,255,.12);
-  margin-top:22px;
-}
-.footGrid{
-  display:grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap:14px;
-  margin-top:12px;
-}
-.footCol{ grid-column: span 6; min-width:0; }
-.mini{
-  color: rgba(255,255,255,.62);
-  font-size:13px;
-  line-height:1.55;
-}
-
-/* ==============================
-   STICKY WHATSAPP (MOBILE)
-============================== */
-.waSticky{
-  position:fixed;
-  left:14px;
-  right:14px;
-  bottom:14px;
-  display:none;
-  padding:12px 14px;
-  border-radius:16px;
-  background: linear-gradient(135deg, rgba(25,214,198,.28), rgba(25,214,198,.10));
-  border:1px solid rgba(25,214,198,.35);
-  box-shadow: 0 18px 55px rgba(0,0,0,.45);
-  font-weight:900;
-  justify-content:center;
-  z-index:60;
-  text-align:center;
-}
-
-/* ==============================
-   RESPONSIVO
-============================== */
-@media (max-width:980px){
-  /* layout */
-  .col4, .col6{ grid-column: span 12; }
-
-  /* hero */
-  .hero .bg{ min-height:560px; padding:18px; }
-
-  /* ctas */
-  .ctaRow .pill{ width:100%; }
-
-  /* picks/cards */
-  .pick{ min-height: 240px; }
-  .footCol{ grid-column: span 12; }
-
-  /* valores (card único) */
-  .row{ grid-template-columns: 1fr; }
-  .rowR{ align-items:stretch; min-width:0; }
-  .rowR .pill{ width:100%; }
-  .rec{ grid-column: span 12; }
-
-  /* sticky WA */
-  body{ padding-bottom: 92px; } /* espaço pro botão fixo */
-  .waSticky{ display:flex; }
-}
-
-/* Landing CTAs */
-.btn{
-  display:inline-block;
-  padding:12px 18px;
-  border-radius:12px;
-  background: var(--brand, #1fe3c0);
-  color:#00130f;
-  font-weight:700;
-  text-decoration:none;
-  box-shadow: 0 10px 30px rgba(0,0,0,.35);
-  transition: transform .15s ease, filter .15s ease;
-}
-.btn:hover{ transform: translateY(-1px); filter: brightness(1.02); }
-.btn:active{ transform: translateY(0px) scale(.99); }
-
-/* WhatsApp floating button */
-.wa-fab{
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 999;
+.brand {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  border-radius: 999px;
-  background: rgba(0,0,0,.65);
-  border: 1px solid rgba(255,255,255,.12);
-  backdrop-filter: blur(10px);
-  color: #fff;
+  color: var(--text);
   text-decoration: none;
-  box-shadow: 0 18px 60px rgba(0,0,0,.45);
+  font-weight: 800;
 }
-.wa-dot{
-  width: 10px;
-  height: 10px;
+
+.pill {
+  font-size: 12px;
+  padding: 6px 10px;
   border-radius: 999px;
-  background: #1fe3c0;
-  box-shadow: 0 0 0 6px rgba(31,227,192,.15);
+  border: 1px solid var(--line);
+  color: var(--muted);
 }
-.wa-text{
-  font-weight: 700;
-  letter-spacing: .2px;
+
+/* -------------------------
+   Tipografia
+------------------------- */
+h1 {
+  font-size: 42px;
+  line-height: 1.05;
+  margin: 0 0 12px;
+  letter-spacing: -0.6px;
 }
-@media (max-width: 520px){
-  .wa-text{ display:none; } /* vira só “bolinha” no mobile */
-  .wa-fab{ padding: 12px; }
+
+h2 {
+  font-size: 18px;
+  margin: 0 0 12px;
+  letter-spacing: -0.2px;
+}
+
+h3 {
+  font-size: 16px;
+  margin: 0 0 6px;
+}
+
+p {
+  margin: 0;
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 16px;
+  max-width: 60ch;
+}
+
+/* -------------------------
+   Hero
+------------------------- */
+.hero {
+  padding: 26px 0 10px;
+}
+
+.heroCard {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.55),
+    rgba(0, 0, 0, 0.25)
+  );
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 26px;
+  box-shadow: var(--shadow-lg);
+}
+
+.kicker {
+  color: rgba(102, 242, 218, 0.85);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* -------------------------
+   Botões
+------------------------- */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--brand);
+  color: #00130f;
+  font-weight: 800;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.btn:hover {
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: scale(0.99);
+}
+
+.btn.outline {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+/* -------------------------
+   Grid / Cards
+------------------------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 14px;
+  margin: 18px 0 28px;
+}
+
+.card {
+  grid-column: span 4;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-md);
+}
+
+.card p {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* -------------------------
+   Listas
+------------------------- */
+ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+li {
+  margin: 8px 0;
+}
+
+/* -------------------------
+   Aviso / Nota
+------------------------- */
+.note {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  color: var(--muted);
+}
+
+/* -------------------------
+   Footer
+------------------------- */
+.footer {
+  padding: 22px 0 40px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.mini {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mini a {
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+}
+
+.mini a:hover {
+  color: #ffffff;
+}
+
+/* -------------------------
+   Responsivo
+------------------------- */
+@media (max-width: 900px) {
+  h1 {
+    font-size: 34px;
+  }
+
+  .card {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 560px) {
+  h1 {
+    font-size: 30px;
+  }
+
+  .heroCard {
+    padding: 18px;
+  }
+
+  .card {
+    grid-column: span 12;
+  }
 }
