@@ -1,336 +1,112 @@
-// js/reserva.js
-import { supabase } from "./supabase.js";
-import { requireAuth } from "./auth.js";
-
-const stateLoading = document.getElementById("stateLoading");
-const stateNotFound = document.getElementById("stateNotFound");
-const stateForm = document.getElementById("stateForm");
-
-const form = document.getElementById("formReserva");
-const nomeEl = document.getElementById("nome");
-const whatsEl = document.getElementById("whatsapp");
-const checkinEl = document.getElementById("checkin");
-const checkoutEl = document.getElementById("checkout");
-const obsEl = document.getElementById("obs");
-
-const metaEl = document.getElementById("meta");
-const msgEl = document.getElementById("msg");
-const btnSalvar = document.getElementById("btnSalvar");
-const btnExcluir = document.getElementById("btnExcluir");
-const btnWhats = document.getElementById("btnWhats");
-
-let USER = null;
-let RESERVA_ID = null;
-let saving = false;
-let deleting = false;
-
-function show(el) { if (el) el.style.display = ""; }
-function hide(el) { if (el) el.style.display = "none"; }
-
-function setMsg(text, type = "info") {
-  if (!msgEl) return;
-  msgEl.textContent = text || "";
-  msgEl.style.color =
-    type === "error" ? "rgba(255,120,120,.95)" :
-    type === "ok"    ? "rgba(102,242,218,.95)" :
-                       "rgba(255,255,255,.70)";
-}
-
-function setLoadingSaving(isLoading) {
-  if (!btnSalvar) return;
-  btnSalvar.disabled = !!isLoading;
-  btnSalvar.style.opacity = isLoading ? "0.75" : "1";
-  btnSalvar.textContent = isLoading ? "Salvando..." : "Salvar alterações";
-}
-
-function setLoadingDelete(isLoading) {
-  if (!btnExcluir) return;
-  btnExcluir.disabled = !!isLoading;
-  btnExcluir.style.opacity = isLoading ? "0.75" : "1";
-  btnExcluir.textContent = isLoading ? "Excluindo..." : "Excluir";
-}
-
-function onlyDigits(v) {
-  return (v || "").toString().replace(/\D/g, "");
-}
-
-/** (11) 99999-9999 */
-function formatPhoneBR(v) {
-  const d = onlyDigits(v).slice(0, 11);
-  if (!d) return "";
-  if (d.length <= 2) return `(${d}`;
-  if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
-  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
-}
-
-/** máscara DD/MM/AAAA */
-function maskDateBR(v) {
-  const d = onlyDigits(v).slice(0, 8);
-  if (d.length <= 2) return d;
-  if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
-  return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
-}
-
-function isValidDateBR(s) {
-  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
-  const [dd, mm, yyyy] = s.split("/").map(Number);
-  if (yyyy < 2020 || yyyy > 2100) return false;
-  if (mm < 1 || mm > 12) return false;
-  const maxDay = new Date(yyyy, mm, 0).getDate();
-  return dd >= 1 && dd <= maxDay;
-}
-
-/** ISO -> BR */
-function isoToBR(iso) {
-  if (!iso) return "";
-  // aceita "YYYY-MM-DD" ou "YYYY-MM-DDTHH..."
-  const part = iso.toString().slice(0, 10);
-  const [y, m, d] = part.split("-");
-  if (!y || !m || !d) return "";
-  return `${d}/${m}/${y}`;
-}
-
-/** BR -> ISO date */
-function brToISO(s) {
-  const [dd, mm, yyyy] = s.split("/");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function compareISO(a, b) {
-  if (!a || !b) return 0;
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function getIdFromQuery() {
-  const p = new URLSearchParams(window.location.search);
-  return p.get("id");
-}
-
-function updateWhatsLink(whatsDigits) {
-  const digits = onlyDigits(whatsDigits);
-  if (!digits || digits.length < 10) {
-    if (btnWhats) hide(btnWhats);
-    return;
-  }
-
-  // garante DDI BR 55 (V1): se já tiver 55, mantém
-  const ddi = digits.startsWith("55") ? digits : `55${digits}`;
-  const url = `https://wa.me/${ddi}`;
-
-  if (btnWhats) {
-    btnWhats.href = url;
-    show(btnWhats);
-  }
-}
-
-function bindMasks() {
-  whatsEl?.addEventListener("input", () => {
-    whatsEl.value = formatPhoneBR(whatsEl.value);
-    updateWhatsLink(whatsEl.value);
-  });
-
-  checkinEl?.addEventListener("input", () => {
-    checkinEl.value = maskDateBR(checkinEl.value);
-  });
-
-  checkoutEl?.addEventListener("input", () => {
-    checkoutEl.value = maskDateBR(checkoutEl.value);
-  });
-}
-
-async function fetchReserva(id) {
-  const { data, error } = await supabase
-    .from("agenda_reservas")
-    .select("id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
-}
-
-function renderReserva(r) {
-  if (!r) return;
-
-  if (nomeEl) nomeEl.value = r.nome_hospede || "";
-  if (whatsEl) whatsEl.value = formatPhoneBR(r.whatsapp || "");
-  if (checkinEl) checkinEl.value = isoToBR(r.checkin);
-  if (checkoutEl) checkoutEl.value = isoToBR(r.checkout);
-  if (obsEl) obsEl.value = r.observacoes || "";
-
-  updateWhatsLink(r.whatsapp || "");
-
-  if (metaEl) {
-    const created = r.created_at ? new Date(r.created_at) : null;
-    const createdTxt = created ? created.toLocaleString("pt-BR") : "";
-    metaEl.textContent = createdTxt ? `Criada em ${createdTxt}` : "";
-  }
-}
-
-async function updateReserva(id, payload) {
-  const { error } = await supabase
-    .from("agenda_reservas")
-    .update(payload)
-    .eq("id", id);
-
-  if (error) throw error;
-}
-
-async function deleteReserva(id) {
-  const { error } = await supabase
-    .from("agenda_reservas")
-    .delete()
-    .eq("id", id);
-
-  if (error) throw error;
-}
-
-async function onSubmit(e) {
-  e.preventDefault();
-  if (saving) return;
-
-  const nome = (nomeEl?.value || "").trim();
-  const whatsMasked = (whatsEl?.value || "").trim();
-  const whatsDigits = onlyDigits(whatsMasked);
-  const checkinBR = (checkinEl?.value || "").trim();
-  const checkoutBR = (checkoutEl?.value || "").trim();
-  const obs = (obsEl?.value || "").trim();
-
-  if (!nome) {
-    setMsg("Informe o nome do hóspede.", "error");
-    nomeEl?.focus();
-    return;
-  }
-
-  if (!isValidDateBR(checkinBR)) {
-    setMsg("Check-in inválido. Use DD/MM/AAAA.", "error");
-    checkinEl?.focus();
-    return;
-  }
-
-  if (!isValidDateBR(checkoutBR)) {
-    setMsg("Check-out inválido. Use DD/MM/AAAA.", "error");
-    checkoutEl?.focus();
-    return;
-  }
-
-  const checkinISO = brToISO(checkinBR);
-  const checkoutISO = brToISO(checkoutBR);
-
-  if (compareISO(checkoutISO, checkinISO) <= 0) {
-    setMsg("Check-out precisa ser depois do check-in.", "error");
-    checkoutEl?.focus();
-    return;
-  }
-
-  if (whatsDigits && whatsDigits.length < 10) {
-    setMsg("WhatsApp parece incompleto. Inclua DDD.", "error");
-    whatsEl?.focus();
-    return;
-  }
-
-  const payload = {
-    nome_hospede: nome,
-    whatsapp: whatsDigits ? whatsDigits : null,
-    checkin: checkinISO,
-    checkout: checkoutISO,
-    observacoes: obs ? obs : null,
-  };
-
-  try {
-    saving = true;
-    setLoadingSaving(true);
-    setMsg("Salvando alterações...", "info");
-
-    await updateReserva(RESERVA_ID, payload);
-
-    setMsg("Salvo ✅", "ok");
-
-    // mantém botão Whats atualizado
-    updateWhatsLink(whatsDigits);
-
-  } catch (err) {
-    console.error("[reserva] update error:", err);
-    setMsg("Erro ao salvar. Verifique RLS/colunas e tente novamente.", "error");
-  } finally {
-    saving = false;
-    setLoadingSaving(false);
-  }
-}
-
-async function onDelete() {
-  if (deleting) return;
-
-  const ok = window.confirm("Excluir esta reserva? Essa ação não pode ser desfeita.");
-  if (!ok) return;
-
-  try {
-    deleting = true;
-    setLoadingDelete(true);
-    setMsg("Excluindo...", "info");
-
-    await deleteReserva(RESERVA_ID);
-
-    setMsg("Excluída ✅ Voltando…", "ok");
-    setTimeout(() => window.location.replace("/reservas.html"), 400);
-
-  } catch (err) {
-    console.error("[reserva] delete error:", err);
-    setMsg("Erro ao excluir. Verifique RLS e tente novamente.", "error");
-  } finally {
-    deleting = false;
-    setLoadingDelete(false);
-  }
-}
-
-async function boot() {
-  USER = await requireAuth({
-    redirectTo: "/entrar.html?next=" + encodeURIComponent(window.location.pathname + window.location.search),
-    renderUserInfo: false
-  });
-  if (!USER) return;
-
-  RESERVA_ID = getIdFromQuery();
-  if (!RESERVA_ID) {
-    hide(stateLoading);
-    hide(stateForm);
-    show(stateNotFound);
-    return;
-  }
-
-  bindMasks();
-
-  try {
-    show(stateLoading);
-    hide(stateNotFound);
-    hide(stateForm);
-
-    const reserva = await fetchReserva(RESERVA_ID);
-
-    if (!reserva) {
-      hide(stateLoading);
-      hide(stateForm);
-      show(stateNotFound);
-      return;
-    }
-
-    renderReserva(reserva);
-
-    hide(stateLoading);
-    hide(stateNotFound);
-    show(stateForm);
-
-    form?.addEventListener("submit", onSubmit);
-    btnExcluir?.addEventListener("click", onDelete);
-
-    setMsg("Edite e salve. (V1)", "info");
-
-  } catch (err) {
-    console.error("[reserva] fetch error:", err);
-    hide(stateLoading);
-    hide(stateForm);
-    show(stateNotFound);
-  }
-}
-
-boot();
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <title>Reservas • Agenda BRsys</title>
+
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Lista de reservas da Agenda BRsys." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/reservas.html" />
+
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/favicon.png" />
+
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+
+<body class="app-body">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-sub muted">Reservas • V1</div>
+      </div>
+
+      <div class="userbox">
+        <div class="muted small">Logado:</div>
+        <div id="userEmail" class="mono small">carregando…</div>
+        <button id="logout" class="btn outline small">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap main">
+
+    <!-- Cabeçalho -->
+    <section class="card">
+      <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <h1 class="h1" style="margin:0;">Reservas</h1>
+          <p class="muted" style="margin-top:6px;">
+            Lista simples, ordenada por data de check-in.
+          </p>
+        </div>
+
+        <div class="row" style="gap:10px;flex-wrap:wrap;">
+          <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
+          <a class="btn outline" href="/app.html">Home</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Loading -->
+    <section id="stateLoading" class="card">
+      <h2 class="h2">Carregando reservas…</h2>
+      <div class="skeleton">
+        <div class="sk-line"></div>
+        <div class="sk-line"></div>
+        <div class="sk-line"></div>
+      </div>
+    </section>
+
+    <!-- Empty -->
+    <section id="stateEmpty" class="card" style="display:none;">
+      <h2 class="h2">Nenhuma reserva ainda</h2>
+      <p class="muted">
+        Você ainda não cadastrou reservas.
+      </p>
+      <div class="row" style="gap:10px;flex-wrap:wrap;">
+        <a class="btn primary" href="/reserva-nova.html">Criar primeira reserva</a>
+        <a class="btn outline" href="/app.html">Voltar</a>
+      </div>
+    </section>
+
+    <!-- Lista -->
+    <section id="stateList" class="card" style="display:none;">
+      <div class="list" id="list">
+        <!-- preenchido via JS -->
+      </div>
+    </section>
+
+    <footer class="foot muted small">
+      BRsys Agenda • V1 • suporte via WhatsApp
+    </footer>
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
+    <a class="bn-item active" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
+    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+  </nav>
+
+  <!-- Guard + email -->
+  <script type="module">
+    import { requireAuth } from "/js/auth.js";
+    const user = await requireAuth({
+      redirectTo: "/entrar.html?next=/reservas.html",
+      renderUserInfo: false
+    });
+    const el = document.getElementById("userEmail");
+    if (el) el.textContent = user?.email || "(sem e-mail)";
+  </script>
+
+  <script type="module" src="/js/nav.js"></script>
+  <script type="module" src="/js/reservas.js"></script>
+</body>
+</html>
