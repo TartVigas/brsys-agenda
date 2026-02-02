@@ -291,3 +291,52 @@ body {
   .h1{ font-size: 24px; }
   .grid-2{ grid-template-columns: 1fr; }
 }
+
+/* ===== Home KPIs (mínimo) ===== */
+.grid-3{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+@media (max-width: 840px){ .grid-3{ grid-template-columns: 1fr; } }
+
+.mini-card{
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  border-radius: 14px;
+  padding: 12px;
+}
+.kpi{ font-size: 28px; font-weight: 800; margin-top: 4px; }
+
+/* ===== Bottom Nav ===== */
+.bottom-nav{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid rgba(255,255,255,.10);
+  z-index: 999;
+}
+
+.bn-item{
+  flex: 1;
+  text-align: center;
+  padding: 10px 10px;
+  border-radius: 12px;
+  color: rgba(255,255,255,.80);
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.bn-item.active{
+  border-color: rgba(102,242,218,.55);
+  color: rgba(102,242,218,.98);
+  background: rgba(102,242,218,.08);
+}
+
+/* dá espaço no fim pra não ficar atrás do menu */
+.main{ padding-bottom: 76px; }
+
+
