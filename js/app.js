@@ -7,6 +7,29 @@ function brToISO(br){
   return `${y}-${m}-${d}`;
 }
 
+function normalizeBRDate(value){
+  if (!value) return null;
+
+  // remove tudo que não for número
+  const digits = value.replace(/\D/g, "");
+
+  if (digits.length !== 8) return null;
+
+  const d = digits.substring(0,2);
+  const m = digits.substring(2,4);
+  const y = digits.substring(4,8);
+
+  return `${d}/${m}/${y}`;
+}
+
+function brToISO(value){
+  const br = normalizeBRDate(value);
+  if (!br) return null;
+
+  const [d,m,y] = br.split("/");
+  return `${y}-${m}-${d}`;
+}
+
 function isoToBR(iso){
   const [y,m,d] = iso.split("-");
   return `${d}/${m}/${y}`;
