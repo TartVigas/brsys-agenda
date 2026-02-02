@@ -2,54 +2,101 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Hoje • BRsys Agenda</title>
+  <title>Reservas • Agenda BRsys</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Lista de reservas da Agenda BRsys." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/reservas.html" />
+
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/favicon.png" />
   <link rel="stylesheet" href="/css/app.css" />
 </head>
-<body class="app">
 
+<body class="app-body">
+
+  <!-- Topbar -->
   <header class="topbar">
-    <a class="brand" href="/hoje.html">BRsys Agenda</a>
-    <div class="topbar-right">
-      <div id="hotelBadge"></div>
-      <div id="userInfo"></div>
-      <button id="logout" class="btn ghost">Sair</button>
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-sub muted">Reservas • V1</div>
+      </div>
+
+      <div class="userbox">
+        <div class="muted small">Logado:</div>
+        <div id="userEmail" class="mono small">carregando…</div>
+        <button id="logout" class="btn outline small">Sair</button>
+      </div>
     </div>
   </header>
 
-  <nav class="tabs">
-    <a href="/hoje.html" class="tab active">Hoje</a>
-    <a href="/reservas.html" class="tab">Reservas</a>
-    <a href="/hospedes.html" class="tab">Hóspedes</a>
-    <a href="/templates.html" class="tab">Templates</a>
-    <a href="/conta.html" class="tab">Conta</a>
-  </nav>
+  <main class="wrap main">
 
-  <main class="container">
-    <h1>Hoje</h1>
     <section class="card">
-      <div id="todaySummary" class="muted">Carregando…</div>
+      <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <h1 class="h1" style="margin:0;">Reservas</h1>
+        <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
+      </div>
+
+      <!-- Filtros -->
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+        <input id="q" class="input" type="text" placeholder="Buscar por nome ou WhatsApp..." style="flex:1;min-width:220px;" />
+
+        <div class="segmented" role="tablist" aria-label="Filtro">
+          <button class="seg-btn active" data-filter="all" type="button">Todas</button>
+          <button class="seg-btn" data-filter="today" type="button">Hoje</button>
+          <button class="seg-btn" data-filter="future" type="button">Futuras</button>
+        </div>
+
+        <button id="btnReload" class="btn outline" type="button">Atualizar</button>
+      </div>
+
+      <!-- Estados -->
+      <div id="stateLoading" style="margin-top:12px;">
+        <p class="muted">Carregando reservas…</p>
+        <div class="skeleton">
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+        </div>
+      </div>
+
+      <div id="stateEmpty" style="display:none;margin-top:14px;">
+        <p class="muted" style="margin:0;">Nenhuma reserva encontrada.</p>
+        <p class="muted small" style="margin-top:6px;">Crie uma reserva teste para validar o fluxo.</p>
+        <div class="cta-row" style="margin-top:10px;">
+          <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
+          <a class="btn outline" href="/app.html">Voltar</a>
+        </div>
+      </div>
+
+      <div id="stateList" class="list" style="display:none;margin-top:12px;"></div>
     </section>
 
-    <section class="grid">
-      <div class="card">
-        <h2>Chegadas</h2>
-        <div id="arrivals"></div>
-      </div>
-
-      <div class="card">
-        <h2>Saídas</h2>
-        <div id="departures"></div>
-      </div>
-
-      <div class="card">
-        <h2>Hospedados</h2>
-        <div id="inhouse"></div>
-      </div>
-    </section>
+    <footer class="foot muted small">
+      BRsys Agenda • V1 • suporte via WhatsApp
+    </footer>
   </main>
 
-  <script type="module" src="/js/hoje.js"></script>
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
+    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
+    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+  </nav>
+
+  <!-- Auth guard + user -->
+  <script type="module">
+    import { requireAuth } from "/js/auth.js";
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/reservas.html", renderUserInfo: false });
+    const el = document.getElementById("userEmail");
+    if (el) el.textContent = user?.email || "(sem e-mail)";
+  </script>
+
+  <script type="module" src="/js/nav.js"></script>
+  <script type="module" src="/js/reservas.js"></script>
 </body>
 </html>
-
