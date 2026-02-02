@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1414" />
 
-  <title>Agenda BRsys — Agenda online simples para hotéis e pousadas</title>
-  <meta name="description" content="Agenda online simples para hotéis e pousadas. Controle suas reservas sem papel, sem planilhas e sem sistemas complicados. Atendimento direto via WhatsApp." />
+  <title>Agenda BRsys — Agenda hoteleira simples para reservas diretas (WhatsApp)</title>
+  <meta name="description" content="Agenda BRsys é uma agenda hoteleira online simples para hotéis e pousadas. Controle reservas diretas com foco em WhatsApp, sem planilhas, sem papel e sem PMS complicado." />
 
   <!-- SEO: manter NOINDEX enquanto valida -->
   <meta name="robots" content="noindex,nofollow" />
@@ -15,33 +15,62 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="BRsys" />
-  <meta property="og:title" content="Agenda BRsys — Agenda online simples para hotéis e pousadas" />
-  <meta property="og:description" content="Controle suas reservas sem papel, sem planilhas e sem sistemas complicados." />
+  <meta property="og:title" content="Agenda BRsys — Agenda hoteleira simples para reservas diretas (WhatsApp)" />
+  <meta property="og:description" content="Controle reservas de hotéis e pousadas sem papel e sem planilhas. Ação direta no WhatsApp. Produto leve (micro PMS) para o dia a dia." />
   <meta property="og:url" content="https://agenda.brsys.com.br/" />
   <meta property="og:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" />
+  <meta property="og:image:alt" content="Agenda BRsys - Agenda hoteleira simples para hotéis e pousadas" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Agenda BRsys — Agenda hoteleira simples (WhatsApp)" />
+  <meta name="twitter:description" content="Reservas diretas com foco em WhatsApp. Sem PMS complicado." />
+  <meta name="twitter:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" />
 
   <link rel="preconnect" href="https://wa.me" />
   <link rel="icon" href="/favicon.ico" />
   <link rel="stylesheet" href="/css/landing.css" />
 
-  <!-- JSON-LD: WebApplication -->
+  <!-- JSON-LD -->
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
-    "@type":"WebApplication",
-    "name":"Agenda BRsys",
-    "applicationCategory":"BusinessApplication",
-    "operatingSystem":"Web",
-    "url":"https://agenda.brsys.com.br/",
-    "description":"Agenda online simples para hotéis e pousadas. Controle reservas sem papel, sem planilhas e sem sistemas complicados.",
-    "publisher":{
-      "@type":"Organization",
-      "name":"BRsys",
-      "url":"https://brsys.com.br/"
-    }
+    "@graph":[
+      {
+        "@type":"Organization",
+        "@id":"https://brsys.com.br/#org",
+        "name":"BRsys",
+        "url":"https://brsys.com.br/",
+        "sameAs":[
+          "https://brsys.com.br/"
+        ]
+      },
+      {
+        "@type":"WebApplication",
+        "@id":"https://agenda.brsys.com.br/#app",
+        "name":"Agenda BRsys",
+        "alternateName":[
+          "BRsys Agenda",
+          "Agenda Hoteleira BRsys"
+        ],
+        "applicationCategory":"BusinessApplication",
+        "operatingSystem":"Web",
+        "url":"https://agenda.brsys.com.br/",
+        "description":"Agenda hoteleira online simples para hotéis e pousadas. Controle reservas diretas com foco em WhatsApp, sem planilhas e sem papel.",
+        "publisher":{"@id":"https://brsys.com.br/#org"},
+        "featureList":[
+          "Cadastro rápido de hóspedes (nome + WhatsApp + datas)",
+          "Lista de reservas por check-in",
+          "Ação direta no WhatsApp do hóspede",
+          "Uso no celular e no PC (sem instalar)"
+        ],
+        "offers":{
+          "@type":"Offer",
+          "availability":"https://schema.org/InStock",
+          "category":"SaaS"
+        }
+      }
+    ]
   }
   </script>
 </head>
@@ -57,7 +86,8 @@
         </a>
 
         <div class="actions" style="margin:0">
-          <a class="btn outline" href="/login.html">Entrar</a>
+          <!-- TROCA AQUI -->
+          <a class="btn outline" href="/entrar.html">Entrar</a>
           <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
             WhatsApp
           </a>
@@ -72,15 +102,18 @@
       <div class="heroCard">
         <div class="kicker">Produto em implantação • V1</div>
 
-        <h1>Agenda online simples para hotéis e pousadas</h1>
+        <h1>Agenda hoteleira simples para reservas diretas</h1>
 
         <p class="sub">
-          Controle suas reservas sem papel, sem planilhas e sem sistemas complicados.
-          Atendimento direto via WhatsApp.
+          A <strong>Agenda BRsys</strong> organiza suas reservas de <strong>hotel ou pousada</strong>
+          sem papel, sem planilha e sem sistema complicado.
+          <br />
+          <strong>Foco total no WhatsApp</strong> (ação direta com o hóspede).
         </p>
 
         <div class="actions">
-          <a class="btn" href="/login.html">
+          <!-- TROCA AQUI -->
+          <a class="btn" href="/entrar.html">
             Teste grátis agora
           </a>
           <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
@@ -103,15 +136,15 @@
       <div class="grid">
         <article class="card">
           <h3>Hospedagens pequenas</h3>
-          <p>Hotéis, pousadas e imóveis que precisam de controle simples e rápido.</p>
+          <p>Hotéis, pousadas e chalés que precisam de controle simples, rápido e confiável.</p>
         </article>
         <article class="card">
-          <h3>Papel / WhatsApp / caderno</h3>
-          <p>Para quem está no improviso e quer organizar reservas sem complicação.</p>
+          <h3>Papel / caderno / WhatsApp</h3>
+          <p>Para quem está no improviso e quer organizar reservas sem virar refém de planilhas.</p>
         </article>
         <article class="card">
-          <h3>Sem PMS completo</h3>
-          <p>Ideal quando um PMS é grande demais ou ainda não faz sentido no momento.</p>
+          <h3>Micro PMS (sem exagero)</h3>
+          <p>Quando um PMS completo é grande demais — aqui é o essencial do dia a dia.</p>
         </article>
       </div>
     </section>
@@ -120,10 +153,10 @@
     <section class="section" id="como-funciona">
       <h2>O que a Agenda BRsys faz</h2>
       <ul>
-        <li><strong>Cadastro rápido de hóspedes</strong> (nome + WhatsApp + datas)</li>
-        <li><strong>Lista simples de reservas</strong> (ordem por check-in)</li>
-        <li><strong>Ação direta</strong>: abrir conversa no WhatsApp do hóspede</li>
-        <li><strong>Acesso no celular ou PC</strong> (sem instalar nada)</li>
+        <li><strong>Cadastro rápido</strong> de hóspedes (nome + WhatsApp + datas)</li>
+        <li><strong>Reservas organizadas</strong> por check-in (sem bagunça)</li>
+        <li><strong>WhatsApp em 1 toque</strong> para confirmar chegada/saída</li>
+        <li><strong>Acesso no celular e no PC</strong> (sem instalar nada)</li>
       </ul>
     </section>
 
@@ -131,7 +164,7 @@
     <section class="section">
       <div class="note">
         <strong>Importante:</strong> a <strong>Agenda BRsys</strong> não é um PMS completo.
-        Ela foi criada para organizar reservas de forma simples, rápida e sem burocracia.
+        É uma <strong>agenda hoteleira leve</strong> para você sair do papel/planilha e ganhar rotina.
       </div>
     </section>
 
@@ -146,8 +179,9 @@
           <a class="btn" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
             Falar agora
           </a>
-          <a class="btn outline" href="/login.html">
-            Testar grátis
+          <!-- TROCA AQUI -->
+          <a class="btn outline" href="/entrar.html">
+            Entrar e testar
           </a>
         </div>
       </div>
@@ -157,7 +191,8 @@
       <div class="mini">
         <div>© <span id="y"></span> BRsys • agenda.brsys.com.br</div>
         <div>
-          <a href="/login.html">Entrar</a>
+          <!-- TROCA AQUI -->
+          <a href="/entrar.html">Entrar</a>
           <span style="opacity:.35;"> • </span>
           <a href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">WhatsApp</a>
           <span style="opacity:.35;"> • </span>
