@@ -450,3 +450,32 @@ li {
   gap: 10px;
   margin-top: 10px;
 }
+
+.item-row{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.item-actions{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+}
+
+.btn.wa{
+  display:inline-flex;
+  align-items:center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(31,227,192,.14);
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn.wa:hover{
+  background: rgba(31,227,192,.20);
+}
