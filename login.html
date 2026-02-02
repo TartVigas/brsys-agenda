@@ -2,31 +2,114 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Entrar • BRsys Agenda</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- ✅ estava app.css (na raiz). No seu repo é /css/app.css -->
+  <!-- SEO básico (V1) -->
+  <meta name="description" content="Acesse a BRsys Agenda: agenda online simples para hotéis e pousadas. Login por link no e-mail." />
+  <meta name="robots" content="noindex,nofollow" />
+
+  <!-- CSS -->
   <link rel="stylesheet" href="/css/app.css" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.ico" />
 </head>
-<body>
 
-<main class="wrap">
-  <h1>Entrar no BRsys Agenda</h1>
-  <p class="muted">Acesse sua agenda online</p>
+<body class="app-body">
+  <!-- Topbar (mini) -->
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div>
+        <div class="brand-title">
+          Entrar • <span class="brand-accent">BRsys</span> Agenda
+        </div>
+        <div class="brand-sub">Acesso rápido por link no e-mail (Magic Link)</div>
+      </div>
 
-  <div class="login-box">
-    <input id="email" type="email" placeholder="seuemail@hotel.com.br" />
-    <button id="btnLogin">Enviar link de acesso</button>
-    <p id="msg" class="msg"></p>
-  </div>
+      <div class="userbox">
+        <div class="small muted">Produto em implantação • V1</div>
+        <a class="btn wa" href="https://wa.me/5513997408157" target="_blank" rel="noopener">
+          Suporte WhatsApp
+        </a>
+      </div>
+    </div>
+  </header>
 
-  <p class="muted small">
-    Você receberá um link seguro por e-mail.
-  </p>
-</main>
+  <main class="wrap main">
+    <section class="card" style="max-width: 560px; margin: 18px auto 0;">
+      <div class="row" style="align-items:flex-start;">
+        <div>
+          <h1 class="h1">Acessar sua agenda</h1>
+          <p class="muted small">
+            Digite seu e-mail e enviamos um link de acesso. Sem senha, sem complicação.
+          </p>
+        </div>
 
-<!-- ✅ estava login.js (na raiz). No seu repo é /js/login.js -->
-<script type="module" src="/js/login.js"></script>
+        <div class="pill" style="white-space:nowrap;">Login seguro</div>
+      </div>
 
+      <form id="formLogin" autocomplete="on" novalidate>
+        <label class="small" style="display:block; margin: 10px 0 6px;">
+          E-mail
+        </label>
+
+        <input
+          id="email"
+          name="email"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          placeholder="seuemail@hotel.com.br"
+          required
+          style="
+            width: 100%;
+            padding: 12px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.14);
+            background: rgba(255,255,255,.04);
+            color: #fff;
+            outline: none;
+          "
+        />
+
+        <div class="cta-row" style="justify-content: space-between; align-items:center;">
+          <button id="btnSend" class="btn" type="submit">
+            Enviar link de acesso
+          </button>
+
+          <a class="btn outline" href="/" style="text-decoration:none;">
+            Voltar
+          </a>
+        </div>
+
+        <!-- feedback -->
+        <div id="msg" class="muted small" style="margin-top: 10px;"></div>
+
+        <div class="note" style="margin-top: 14px;">
+          <div style="font-weight:800; margin-bottom: 6px;">Dica rápida</div>
+          <div class="muted small">
+            Se não chegar em 1 minuto, verifique <strong>spam</strong> ou <strong>promoções</strong>.
+            O link expira e pode ser reenviado quando quiser.
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <p class="foot small muted" style="margin-top: 14px;">
+      BRsys Agenda • V1 — suporte via WhatsApp
+    </p>
+  </main>
+
+  <!-- Seu JS -->
+  <script type="module" src="/js/login.js"></script>
+
+  <!-- Mini UX: foca no campo ao abrir -->
+  <script>
+    window.addEventListener("load", () => {
+      const el = document.getElementById("email");
+      if (el) el.focus();
+    });
+  </script>
 </body>
 </html>
