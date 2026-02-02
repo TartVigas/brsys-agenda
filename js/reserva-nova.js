@@ -8,9 +8,10 @@ const whatsEl = document.getElementById("whatsapp");
 const checkinEl = document.getElementById("checkin");
 const checkoutEl = document.getElementById("checkout");
 const obsEl = document.getElementById("obs");
-const msgEl = document.getElementById("msg");
+
 const btnSalvar = document.getElementById("btnSalvar");
 const btnLimpar = document.getElementById("btnLimpar");
+const msgEl = document.getElementById("msg");
 
 let USER = null;
 let saving = false;
@@ -18,7 +19,6 @@ let saving = false;
 function setMsg(text, type = "info") {
   if (!msgEl) return;
   msgEl.textContent = text || "";
-
   msgEl.style.color =
     type === "error" ? "rgba(255,120,120,.95)" :
     type === "ok"    ? "rgba(102,242,218,.95)" :
@@ -28,146 +28,155 @@ function setMsg(text, type = "info") {
 function setLoading(isLoading) {
   if (!btnSalvar) return;
   btnSalvar.disabled = !!isLoading;
-  btnSalvar.style.opacity = isLoading ? "0.75" : "1";
+  btnSalvar.style.opacity = isLoading ? "0.78" : "1";
   btnSalvar.textContent = isLoading ? "Salvando..." : "Salvar reserva";
+}
+
+function getNext() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("next") || "/reservas.html";
 }
 
 function onlyDigits(v) {
   return (v || "").toString().replace(/\D/g, "");
 }
 
-/** formata WhatsApp BR básico: (11) 99999-9999 */
 function formatPhoneBR(v) {
   const d = onlyDigits(v).slice(0, 11);
   if (!d) return "";
-
   if (d.length <= 2) return `(${d}`;
   if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`;
   return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
 }
 
-/** máscara DD/MM/AAAA */
-function maskDateBR(v) {
+function formatDateBR(v) {
   const d = onlyDigits(v).slice(0, 8);
+  if (!d) return "";
   if (d.length <= 2) return d;
   if (d.length <= 4) return `${d.slice(0,2)}/${d.slice(2)}`;
   return `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`;
 }
 
-/** valida DD/MM/AAAA (simples) */
-function isValidDateBR(s) {
-  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
+function parseBRDateToISO(br) {
+  // "DD/MM/AAAA" => "AAAA-MM-DD"
+  const s = (br || "").trim();
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
 
-  const [dd, mm, yyyy] = s.split("/").map(Number);
-  if (yyyy < 2020 || yyyy > 2100) return false;
-  if (mm < 1 || mm > 12) return false;
+  const dd = Number(m[1]);
+  const mm = Number(m[2]);
+  const yyyy = Number(m[3]);
 
-  const maxDay = new Date(yyyy, mm, 0).getDate();
-  if (dd < 1 || dd > maxDay) return false;
+  if (yyyy < 1900 || yyyy > 2100) return null;
+  if (mm < 1 || mm > 12) return null;
+  if (dd < 1 || dd > 31) return null;
 
-  return true;
-}
+  const iso = `${String(yyyy).padStart(4,"0")}-${String(mm).padStart(2,"0")}-${String(dd).padStart(2,"0")}`;
 
-/** converte DD/MM/AAAA -> YYYY-MM-DD */
-function brToISO(s) {
-  const [dd, mm, yyyy] = s.split("/");
-  return `${yyyy}-${mm}-${dd}`;
+  // valida data real (ex: 31/02)
+  const dt = new Date(iso + "T00:00:00");
+  const ok =
+    dt.getFullYear() === yyyy &&
+    (dt.getMonth() + 1) === mm &&
+    dt.getDate() === dd;
+
+  return ok ? iso : null;
 }
 
 function compareISO(a, b) {
-  // ISO date lexical compare funciona
-  if (!a || !b) return 0;
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function bindMasks() {
-  whatsEl?.addEventListener("input", () => {
-    const caret = whatsEl.selectionStart || 0;
-    const before = whatsEl.value;
-    whatsEl.value = formatPhoneBR(before);
-    // não tenta preservar caret com perfeição no V1
-  });
-
-  checkinEl?.addEventListener("input", () => {
-    checkinEl.value = maskDateBR(checkinEl.value);
-  });
-
-  checkoutEl?.addEventListener("input", () => {
-    checkoutEl.value = maskDateBR(checkoutEl.value);
-  });
-}
-
-function clearForm() {
-  if (nomeEl) nomeEl.value = "";
-  if (whatsEl) whatsEl.value = "";
-  if (checkinEl) checkinEl.value = "";
-  if (checkoutEl) checkoutEl.value = "";
-  if (obsEl) obsEl.value = "";
-  setMsg("", "info");
-  nomeEl?.focus();
+  // retorna -1, 0, 1
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }
 
 async function insertReserva(payload) {
-  const { error } = await supabase
-    .from("agenda_reservas")
-    .insert(payload);
+  // 1) tenta com status
+  try {
+    const { data, error } = await supabase
+      .from("agenda_reservas")
+      .insert(payload)
+      .select("id")
+      .single();
 
-  if (error) throw error;
+    if (error) throw error;
+    return data; // {id}
+  } catch (e) {
+    // 2) fallback sem status (se coluna não existir)
+    const clone = { ...payload };
+    delete clone.status;
+
+    const { data, error } = await supabase
+      .from("agenda_reservas")
+      .insert(clone)
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+}
+
+function cleanText(v) {
+  return (v || "").toString().trim();
+}
+
+function cleanPhone(v) {
+  const d = onlyDigits(v);
+  // guarda como digitado? prefiro armazenar só dígitos no banco (V1)
+  return d || null;
+}
+
+function resetForm() {
+  form?.reset();
+  setMsg("", "info");
+  nomeEl?.focus();
 }
 
 async function onSubmit(e) {
   e.preventDefault();
   if (saving) return;
 
-  const nome = (nomeEl?.value || "").trim();
-  const whatsappMasked = (whatsEl?.value || "").trim();
-  const whatsappDigits = onlyDigits(whatsappMasked); // guarda só números
-  const checkinBR = (checkinEl?.value || "").trim();
-  const checkoutBR = (checkoutEl?.value || "").trim();
-  const obs = (obsEl?.value || "").trim();
+  const nome = cleanText(nomeEl?.value);
+  const whatsapp_raw = cleanText(whatsEl?.value);
+  const checkin_br = cleanText(checkinEl?.value);
+  const checkout_br = cleanText(checkoutEl?.value);
+  const obs = cleanText(obsEl?.value);
 
   if (!nome) {
-    setMsg("Informe o nome do hóspede.", "error");
+    setMsg("Digite o nome do hóspede.", "error");
     nomeEl?.focus();
     return;
   }
 
-  if (!isValidDateBR(checkinBR)) {
+  const checkin = parseBRDateToISO(checkin_br);
+  const checkout = parseBRDateToISO(checkout_br);
+
+  if (!checkin) {
     setMsg("Check-in inválido. Use DD/MM/AAAA.", "error");
     checkinEl?.focus();
     return;
   }
-
-  if (!isValidDateBR(checkoutBR)) {
+  if (!checkout) {
     setMsg("Check-out inválido. Use DD/MM/AAAA.", "error");
     checkoutEl?.focus();
     return;
   }
 
-  const checkinISO = brToISO(checkinBR);
-  const checkoutISO = brToISO(checkoutBR);
-
-  if (compareISO(checkoutISO, checkinISO) <= 0) {
-    setMsg("Check-out precisa ser depois do check-in.", "error");
+  if (compareISO(checkout, checkin) <= 0) {
+    setMsg("O check-out precisa ser depois do check-in.", "error");
     checkoutEl?.focus();
     return;
   }
 
-  // whatsapp opcional, mas se tiver, valida tamanho mínimo (DDD + 8/9)
-  if (whatsappDigits && whatsappDigits.length < 10) {
-    setMsg("WhatsApp parece incompleto. Inclua DDD.", "error");
-    whatsEl?.focus();
-    return;
-  }
-
   const payload = {
-    user_id: USER.id,
+    // user_id normalmente é preenchido por trigger/RLS? mas vamos garantir caso não tenha.
+    user_id: USER?.id,
     nome_hospede: nome,
-    whatsapp: whatsappDigits ? whatsappDigits : null,
-    checkin: checkinISO,
-    checkout: checkoutISO,
-    observacoes: obs ? obs : null,
-    // status: "reservado" // se você tiver coluna status, pode habilitar
+    whatsapp: cleanPhone(whatsapp_raw),
+    checkin,
+    checkout,
+    observacoes: obs || null,
+    status: "pendente", // V1 default
   };
 
   try {
@@ -175,36 +184,64 @@ async function onSubmit(e) {
     setLoading(true);
     setMsg("Salvando reserva...", "info");
 
-    await insertReserva(payload);
+    const created = await insertReserva(payload);
 
-    setMsg("Reserva salva! Indo para a lista…", "ok");
+    setMsg("Reserva criada ✅", "ok");
 
-    // leve delay pra feedback visual
-    setTimeout(() => {
-      window.location.replace("/reservas.html");
-    }, 450);
+    const next = encodeURIComponent(getNext());
 
+    if (created?.id) {
+      // vai pro detalhe
+      window.location.replace(`/reserva.html?id=${encodeURIComponent(created.id)}&next=${next}`);
+    } else {
+      // fallback
+      window.location.replace(getNext());
+    }
   } catch (err) {
     console.error("[reserva-nova] insert error:", err);
-    setMsg("Erro ao salvar. Verifique RLS/colunas e tente novamente.", "error");
+    setMsg("Erro ao salvar. Verifique RLS/policies e tente novamente.", "error");
   } finally {
     saving = false;
     setLoading(false);
   }
 }
 
+/* ========= Máscaras leves ========= */
+whatsEl?.addEventListener("input", () => {
+  const before = whatsEl.value;
+  const after = formatPhoneBR(before);
+  if (before !== after) whatsEl.value = after;
+});
+
+checkinEl?.addEventListener("input", () => {
+  const before = checkinEl.value;
+  const after = formatDateBR(before);
+  if (before !== after) checkinEl.value = after;
+});
+
+checkoutEl?.addEventListener("input", () => {
+  const before = checkoutEl.value;
+  const after = formatDateBR(before);
+  if (before !== after) checkoutEl.value = after;
+});
+
+/* ========= Botões ========= */
+btnLimpar?.addEventListener("click", (e) => {
+  e.preventDefault();
+  resetForm();
+});
+
+/* ========= Boot ========= */
 async function boot() {
-  USER = await requireAuth({ redirectTo: "/entrar.html?next=/reserva-nova.html", renderUserInfo: false });
+  USER = await requireAuth({
+    redirectTo: "/entrar.html?next=" + encodeURIComponent(window.location.pathname + window.location.search),
+    renderUserInfo: false
+  });
   if (!USER) return;
 
-  bindMasks();
-  form?.addEventListener("submit", onSubmit);
-
-  btnLimpar?.addEventListener("click", () => clearForm());
-
-  setMsg("Preencha e salve. Depois evoluímos para editar/excluir.", "info");
+  setMsg("Preencha e salve. Depois você edita detalhes.", "info");
   nomeEl?.focus();
 }
 
+form?.addEventListener("submit", onSubmit);
 boot();
-
