@@ -5,21 +5,18 @@
   <title>Agenda • BRsys</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- SEO mínimo -->
   <meta name="description" content="Agenda simples para hotéis e pousadas. Controle reservas sem complicação. WhatsApp integrado." />
+  <meta name="robots" content="noindex,nofollow" />
   <link rel="canonical" href="https://agenda.brsys.com.br/app.html" />
 
-  <!-- OpenGraph -->
   <meta property="og:title" content="Agenda • BRsys" />
   <meta property="og:description" content="Agenda simples para hotéis e pousadas. Sem PMS, sem complicação." />
   <meta property="og:url" content="https://agenda.brsys.com.br/app.html" />
   <meta property="og:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" />
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="/img/favicon.png" />
   <link rel="apple-touch-icon" href="/img/favicon.png" />
 
-  <!-- CSS -->
   <link rel="stylesheet" href="/css/app.css" />
 </head>
 
@@ -30,7 +27,7 @@
     <div class="wrap topbar-inner">
       <div class="brand">
         <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
-        <div class="brand-sub muted">V1 • em implantação</div>
+        <div class="brand-sub muted">Home • V1 em implantação</div>
       </div>
 
       <div class="userbox">
@@ -42,15 +39,51 @@
     </div>
   </header>
 
-  <!-- Conteúdo -->
   <main class="wrap main">
+
+    <!-- Atalhos -->
     <section class="card">
+      <div class="row" style="align-items:center;justify-content:space-between;">
+        <h1 class="h1" style="margin:0;">Visão geral</h1>
+        <a class="btn outline small" href="/reserva-nova.html">+ Nova reserva</a>
+      </div>
 
-      <!-- Estado: Loading -->
-      <div id="stateLoading">
-        <h1 class="h1">Carregando sua agenda…</h1>
-        <p class="muted">Aguarde um instante.</p>
+      <p class="muted" style="margin-top:8px;">
+        Resumo rápido do dia e atalhos para trabalhar sem enrolação.
+      </p>
 
+      <div class="grid-3" id="kpis" style="margin-top:14px;">
+        <div class="mini-card">
+          <div class="muted small">Check-ins hoje</div>
+          <div class="kpi" id="kpiCheckin">—</div>
+        </div>
+        <div class="mini-card">
+          <div class="muted small">Check-outs hoje</div>
+          <div class="kpi" id="kpiCheckout">—</div>
+        </div>
+        <div class="mini-card">
+          <div class="muted small">Reservas futuras</div>
+          <div class="kpi" id="kpiFuturas">—</div>
+        </div>
+      </div>
+
+      <div class="cta-row" style="margin-top:16px;flex-wrap:wrap;gap:10px;">
+        <a class="btn primary" href="/reservas.html">Ver reservas</a>
+        <a class="btn outline" href="/hoje.html">Hoje</a>
+        <a class="btn outline" href="/hospedes.html">Hóspedes</a>
+        <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">Suporte WhatsApp</a>
+      </div>
+    </section>
+
+    <!-- Últimas reservas -->
+    <section class="card" style="margin-top:14px;">
+      <div class="row" style="align-items:center;justify-content:space-between;">
+        <h2 class="h2" style="margin:0;">Últimas reservas</h2>
+        <a class="muted small" href="/reservas.html">Abrir lista completa →</a>
+      </div>
+
+      <div id="homeLoading" style="margin-top:10px;">
+        <p class="muted">Carregando…</p>
         <div class="skeleton">
           <div class="sk-line"></div>
           <div class="sk-line"></div>
@@ -58,34 +91,15 @@
         </div>
       </div>
 
-      <!-- Estado: Empty -->
-      <div id="stateEmpty" style="display:none;">
-        <h1 class="h1">Nenhuma reserva ainda</h1>
-        <p class="muted">
-          Esta é a V1 da Agenda BRsys. Aqui você vai registrar reservas com nome, WhatsApp e datas.
-        </p>
-
-        <div class="cta-row">
-          <button id="btnNew" class="btn primary">+ Nova reserva</button>
-          <a class="btn outline" href="/" title="Voltar para a página inicial">Voltar</a>
-        </div>
-
-        <div class="tips">
-          <p class="muted small">Dica: comece criando 1 reserva teste para validar o fluxo.</p>
+      <div id="homeEmpty" style="display:none;margin-top:12px;">
+        <p class="muted" style="margin:0;">Nenhuma reserva ainda.</p>
+        <p class="muted small" style="margin-top:6px;">Crie 1 reserva teste pra validar o fluxo.</p>
+        <div class="cta-row" style="margin-top:10px;">
+          <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
         </div>
       </div>
 
-      <!-- Estado: Lista -->
-      <div id="stateList" style="display:none;">
-        <div class="row">
-          <h1 class="h1">Reservas</h1>
-          <button id="btnNew2" class="btn primary">+ Nova</button>
-        </div>
-
-        <!-- A lista é preenchida via app.js -->
-        <div id="list" class="list"></div>
-      </div>
-
+      <div id="homeList" class="list" style="display:none;margin-top:12px;"></div>
     </section>
 
     <footer class="foot muted small">
@@ -93,49 +107,25 @@
     </footer>
   </main>
 
-  <!-- Modal Nova Reserva -->
-  <div id="modalBackdrop" class="modal-backdrop hidden">
-    <div class="modal">
-      <h2>Nova reserva</h2>
-
-      <form id="formReserva" autocomplete="off">
-        <label>
-          Nome do hóspede
-          <input type="text" id="nome" name="nome" required />
-        </label>
-
-        <label>
-          WhatsApp
-          <input type="text" id="whatsapp" name="whatsapp" placeholder="(13) 99740-8157" />
-        </label>
-
-        <div class="grid-2">
-          <label>
-            Check-in
-            <input type="text" id="checkin" name="checkin" placeholder="DD/MM/AAAA" required inputmode="numeric" />
-          </label>
-
-          <label>
-            Check-out
-            <input type="text" id="checkout" name="checkout" placeholder="DD/MM/AAAA" required inputmode="numeric" />
-          </label>
-        </div>
-
-        <label>
-          Observações
-          <textarea id="obs" name="obs" rows="2" placeholder="Ex: quarto 03, pagamento na chegada…"></textarea>
-        </label>
-
-        <div class="modal-actions">
-          <button type="button" id="cancelar" class="btn outline">Cancelar</button>
-          <button type="submit" class="btn primary">Salvar reserva</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
+    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
+    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+  </nav>
 
   <!-- Guard primeiro -->
-  <script type="module" src="/js/app.js"></script>
+  <script type="module">
+    import { requireAuth } from "/js/auth.js";
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/app.html", renderUserInfo: false });
 
+    // preencher e-mail no topo
+    const el = document.getElementById("userEmail");
+    if (el) el.textContent = user?.email || "(sem e-mail)";
+  </script>
+
+  <script type="module" src="/js/nav.js"></script>
+  <script type="module" src="/js/home.js"></script>
 </body>
 </html>
