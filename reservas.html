@@ -2,12 +2,11 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-
   <title>Reservas • Agenda BRsys</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Lista de reservas da Agenda BRsys." />
+  <meta name="description" content="Lista de reservas na Agenda BRsys." />
   <link rel="canonical" href="https://agenda.brsys.com.br/reservas.html" />
 
   <link rel="icon" type="image/png" href="/img/favicon.png" />
@@ -36,14 +35,12 @@
 
   <main class="wrap main">
 
-    <!-- Cabeçalho -->
+    <!-- Header ações -->
     <section class="card">
       <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <div>
           <h1 class="h1" style="margin:0;">Reservas</h1>
-          <p class="muted" style="margin-top:6px;">
-            Lista simples, ordenada por data de check-in.
-          </p>
+          <div id="summary" class="muted small" style="margin-top:6px;">Carregando…</div>
         </div>
 
         <div class="row" style="gap:10px;flex-wrap:wrap;">
@@ -51,34 +48,56 @@
           <a class="btn outline" href="/app.html">Home</a>
         </div>
       </div>
-    </section>
 
-    <!-- Loading -->
-    <section id="stateLoading" class="card">
-      <h2 class="h2">Carregando reservas…</h2>
-      <div class="skeleton">
-        <div class="sk-line"></div>
-        <div class="sk-line"></div>
-        <div class="sk-line"></div>
+      <!-- Busca -->
+      <div style="margin-top:14px;">
+        <label class="label" style="margin:0;">
+          Buscar
+          <input class="input" id="q" type="text" placeholder="Nome do hóspede ou WhatsApp..." />
+        </label>
       </div>
-    </section>
 
-    <!-- Empty -->
-    <section id="stateEmpty" class="card" style="display:none;">
-      <h2 class="h2">Nenhuma reserva ainda</h2>
-      <p class="muted">
-        Você ainda não cadastrou reservas.
-      </p>
-      <div class="row" style="gap:10px;flex-wrap:wrap;">
-        <a class="btn primary" href="/reserva-nova.html">Criar primeira reserva</a>
-        <a class="btn outline" href="/app.html">Voltar</a>
+      <!-- Filtros -->
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+        <button class="btn outline small" data-filter="all">Todas</button>
+        <button class="btn outline small" data-filter="today">Hoje</button>
+        <button class="btn outline small" data-filter="future">Futuras</button>
+        <button class="btn outline small" data-filter="past">Passadas</button>
       </div>
+
+      <div id="msg" class="muted small" style="margin-top:10px;"></div>
     </section>
 
     <!-- Lista -->
-    <section id="stateList" class="card" style="display:none;">
-      <div class="list" id="list">
-        <!-- preenchido via JS -->
+    <section class="card" style="margin-top:14px;">
+      <!-- Loading -->
+      <div id="stateLoading">
+        <h2 class="h2" style="margin:0;">Carregando…</h2>
+        <p class="muted">Aguarde um instante.</p>
+
+        <div class="skeleton">
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+        </div>
+      </div>
+
+      <!-- Empty -->
+      <div id="stateEmpty" style="display:none;">
+        <h2 class="h2" style="margin:0;">Nenhuma reserva ainda</h2>
+        <p class="muted" style="margin-top:8px;">
+          Comece criando sua primeira reserva para validar o fluxo.
+        </p>
+
+        <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+          <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
+          <a class="btn outline" href="/app.html">Voltar</a>
+        </div>
+      </div>
+
+      <!-- List -->
+      <div id="stateList" style="display:none;">
+        <div id="list"></div>
       </div>
     </section>
 
@@ -90,18 +109,15 @@
   <!-- Bottom Nav -->
   <nav class="bottom-nav">
     <a class="bn-item" data-nav="home" href="/app.html">Home</a>
-    <a class="bn-item active" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
     <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
     <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
   </nav>
 
-  <!-- Guard + email -->
+  <!-- Guard e email do user -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
-    const user = await requireAuth({
-      redirectTo: "/entrar.html?next=/reservas.html",
-      renderUserInfo: false
-    });
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/reservas.html", renderUserInfo: false });
     const el = document.getElementById("userEmail");
     if (el) el.textContent = user?.email || "(sem e-mail)";
   </script>
