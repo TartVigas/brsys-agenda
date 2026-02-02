@@ -1,55 +1,259 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Agenda Online para Hotéis e Pousadas | BRsys</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Agenda online simples para hotéis e pousadas. Controle reservas sem papel, planilhas ou sistemas complexos.">
-  <meta name="robots" content="noindex,nofollow">
-  <link rel="stylesheet" href="/css/app.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1414" />
+
+  <title>Agenda BRsys — Agenda online simples para hotéis e pousadas</title>
+  <meta name="description" content="Agenda online simples para hotéis e pousadas. Controle suas reservas sem papel, sem planilhas e sem sistemas complicados. Atendimento direto via WhatsApp." />
+
+  <!-- Indexação: mantenha NOINDEX agora; quando decidir indexar, troque para 'index,follow' -->
+  <meta name="robots" content="noindex,nofollow" />
+
+  <!-- Canonical (mantém consistência) -->
+  <link rel="canonical" href="https://agenda.brsys.com.br/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="BRsys" />
+  <meta property="og:title" content="Agenda BRsys — Agenda online simples para hotéis e pousadas" />
+  <meta property="og:description" content="Controle suas reservas sem papel, sem planilhas e sem sistemas complicados. Atendimento direto via WhatsApp." />
+  <meta property="og:url" content="https://agenda.brsys.com.br/" />
+  <!-- Se você tiver uma imagem OG depois, descomente e aponte: -->
+  <!-- <meta property="og:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" /> -->
+  <!-- <meta property="og:image:width" content="1200" /> -->
+  <!-- <meta property="og:image:height" content="630" /> -->
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Agenda BRsys — Agenda online simples para hotéis e pousadas" />
+  <meta name="twitter:description" content="Controle suas reservas sem papel, sem planilhas e sem sistemas complicados." />
+  <!-- <meta name="twitter:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" /> -->
+
+  <link rel="preconnect" href="https://wa.me" />
+  <link rel="stylesheet" href="/css/app.css" />
+
+  <!-- JSON-LD: WebApplication + Organization (simples e seguro para landing) -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebApplication",
+    "name":"Agenda BRsys",
+    "applicationCategory":"BusinessApplication",
+    "operatingSystem":"Web",
+    "url":"https://agenda.brsys.com.br/",
+    "description":"Agenda online simples para hotéis e pousadas. Controle reservas sem papel, sem planilhas e sem sistemas complicados.",
+    "offers":{
+      "@type":"Offer",
+      "price":"0",
+      "priceCurrency":"BRL",
+      "description":"Demonstração e orientação inicial via WhatsApp (validação de necessidade)."
+    },
+    "publisher":{
+      "@type":"Organization",
+      "name":"BRsys",
+      "url":"https://brsys.com.br/"
+    }
+  }
+  </script>
+
+  <style>
+    /* fallback minimal caso seu app.css ainda esteja em evolução */
+    :root{
+      --bg:#070c0c;
+      --panel:rgba(255,255,255,.04);
+      --line:rgba(255,255,255,.10);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.72);
+      --brand:#1fe3c0;
+      --brand2:#66f2da;
+      --max:1120px;
+      --r:18px;
+      --shadow:0 18px 60px rgba(0,0,0,.45);
+    }
+    body{
+      margin:0;
+      background:
+        radial-gradient(800px 500px at 20% 10%, rgba(31,227,192,.18), transparent 55%),
+        radial-gradient(900px 520px at 80% 40%, rgba(102,242,218,.10), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      line-height:1.45;
+    }
+    .wrap{max-width:var(--max);margin:0 auto;padding:0 18px;}
+    .top{position:sticky;top:0;z-index:50;background:rgba(7,12,12,.65);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.06);}
+    .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 0;}
+    .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--text);}
+    .pill{font-size:12px;padding:6px 10px;border:1px solid rgba(255,255,255,.12);border-radius:999px;color:var(--muted);}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 18px;border-radius:12px;background:var(--brand);color:#00130f;font-weight:800;text-decoration:none;box-shadow:var(--shadow);border:0;}
+    .btn:hover{filter:brightness(1.03);}
+    .btn:active{transform:scale(.99);}
+    .btn.outline{background:transparent;color:var(--text);border:1px solid rgba(255,255,255,.14);box-shadow:none;}
+    .hero{padding:26px 0 10px;}
+    .heroCard{
+      background:linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.25));
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:24px;
+      padding:26px;
+      box-shadow:var(--shadow);
+    }
+    h1{font-size:42px;line-height:1.05;margin:0 0 12px;letter-spacing:-.6px;}
+    .sub{color:var(--muted);font-size:16px;margin:0 0 18px;max-width:60ch;}
+    .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;margin:18px 0 28px;}
+    .card{
+      grid-column: span 4;
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:16px;
+      box-shadow:0 12px 40px rgba(0,0,0,.25);
+    }
+    .card h3{margin:0 0 6px;font-size:16px;}
+    .card p{margin:0;color:var(--muted);font-size:14px;}
+    .section{margin:8px 0 26px;}
+    .section h2{margin:0 0 10px;font-size:18px;letter-spacing:-.2px;}
+    ul{margin:0;padding-left:18px;color:var(--muted);}
+    li{margin:8px 0;}
+    .note{
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      padding:14px 16px;
+      color:var(--muted);
+    }
+    .kicker{color:rgba(102,242,218,.85);font-weight:800;font-size:12px;letter-spacing:.9px;text-transform:uppercase;}
+    .footer{padding:20px 0 40px;color:rgba(255,255,255,.55);font-size:12px;border-top:1px solid rgba(255,255,255,.08);}
+    .mini{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;}
+    .mini a{color:rgba(255,255,255,.75);text-decoration:none;}
+    .mini a:hover{color:#fff;}
+    @media (max-width: 900px){
+      h1{font-size:34px;}
+      .card{grid-column: span 6;}
+    }
+    @media (max-width: 560px){
+      h1{font-size:30px;}
+      .heroCard{padding:18px;}
+      .card{grid-column: span 12;}
+    }
+  </style>
 </head>
 
 <body>
-  <main class="container">
+  <!-- Topbar -->
+  <header class="top">
+    <div class="wrap">
+      <div class="topbar">
+        <a class="brand" href="https://brsys.com.br/" aria-label="BRsys">
+          <strong>BRsys</strong>
+          <span class="pill">Agenda</span>
+        </a>
 
-    <section class="hero">
-      <h1>Agenda online simples para hotéis e pousadas</h1>
-      <p>Controle suas reservas sem papel, sem planilhas e sem sistemas complicados.</p>
-      <a class="btn-primary" href="https://wa.me/5513997408157" target="_blank">
-        Quero conhecer a Agenda BRsys
-      </a>
+        <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
+          Falar no WhatsApp
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Hero -->
+    <section class="hero" id="topo">
+      <div class="heroCard">
+        <div class="kicker">Produto em implantação • V1</div>
+        <h1>Agenda online simples para hotéis e pousadas</h1>
+        <p class="sub">
+          Controle suas reservas sem papel, sem planilhas e sem sistemas complicados.
+          Atendimento direto via WhatsApp.
+        </p>
+
+        <div class="actions">
+          <a class="btn" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
+            Quero conhecer a Agenda BRsys
+          </a>
+          <a class="btn outline" href="#como-funciona">
+            Ver como funciona
+          </a>
+        </div>
+      </div>
     </section>
 
-    <section>
+    <!-- Cards (para quem é) -->
+    <section class="section" id="para-quem-e">
       <h2>Para quem é</h2>
-      <ul>
-        <li>Hotéis e pousadas pequenas</li>
-        <li>Hospedagens que usam papel ou WhatsApp</li>
-        <li>Quem quer organização sem PMS complexo</li>
-      </ul>
+      <div class="grid">
+        <article class="card">
+          <h3>Hospedagens pequenas</h3>
+          <p>Hotéis, pousadas e imóveis que precisam de controle simples e rápido.</p>
+        </article>
+        <article class="card">
+          <h3>Papel / WhatsApp / caderno</h3>
+          <p>Para quem está no improviso e quer organizar reservas sem complicação.</p>
+        </article>
+        <article class="card">
+          <h3>Sem PMS completo</h3>
+          <p>Ideal quando um PMS é grande demais ou ainda não faz sentido no momento.</p>
+        </article>
+      </div>
     </section>
 
-    <section>
+    <!-- Como funciona -->
+    <section class="section" id="como-funciona">
       <h2>O que a Agenda BRsys faz</h2>
       <ul>
-        <li>Agenda de reservas por data</li>
-        <li>Organização por quartos</li>
-        <li>Cadastro simples de hóspedes</li>
-        <li>Acesso por celular ou computador</li>
+        <li><strong>Agenda de reservas por data</strong> (visual simples e rápida)</li>
+        <li><strong>Organização por quartos</strong> (controle do básico sem dor)</li>
+        <li><strong>Cadastro rápido de hóspedes</strong> (nome, datas e observações)</li>
+        <li><strong>Acesso por celular ou computador</strong> (uso diário, sem instalação)</li>
       </ul>
     </section>
 
-    <section class="note">
-      <strong>Importante:</strong> a Agenda BRsys não é um PMS completo.
-      Ela foi criada para quem precisa apenas organizar reservas.
+    <!-- Transparência -->
+    <section class="section">
+      <div class="note">
+        <strong>Importante:</strong> a <strong>Agenda BRsys</strong> não é um PMS completo.
+        Ela foi criada para organizar reservas de forma simples, rápida e sem burocracia.
+      </div>
     </section>
 
-    <section class="cta">
-      <a class="btn-primary" href="https://wa.me/5513997408157" target="_blank">
-        Falar no WhatsApp
-      </a>
+    <!-- CTA final -->
+    <section class="section" id="contato">
+      <div class="heroCard" style="padding:18px;border-radius:18px;">
+        <h2 style="margin:0 0 8px;">Quer ver se a Agenda BRsys serve para sua hospedagem?</h2>
+        <p class="sub" style="margin:0 0 14px;">
+          Me chama no WhatsApp e eu te digo em 2 minutos se faz sentido (sem enrolação).
+        </p>
+        <div class="actions">
+          <a class="btn" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
+            Quero testar a Agenda BRsys
+          </a>
+          <a class="btn outline" href="https://brsys.com.br/" rel="noopener noreferrer">
+            Voltar ao site BRsys
+          </a>
+        </div>
+      </div>
     </section>
 
+    <footer class="footer">
+      <div class="mini">
+        <div>© <span id="y"></span> BRsys • agenda.brsys.com.br</div>
+        <div>
+          <a href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+          <span style="opacity:.35;"> • </span>
+          <a href="https://brsys.com.br/" target="_blank" rel="noopener noreferrer">brsys.com.br</a>
+        </div>
+      </div>
+    </footer>
   </main>
+
+  <script>
+    // ano no rodapé
+    document.getElementById("y").textContent = new Date().getFullYear();
+  </script>
+
+  <!-- Seu JS (botão flutuante / upgrades) -->
+  <script src="/js/app.js" defer></script>
 </body>
 </html>
