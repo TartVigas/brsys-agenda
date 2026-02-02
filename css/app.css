@@ -339,4 +339,50 @@ body {
 /* dá espaço no fim pra não ficar atrás do menu */
 .main{ padding-bottom: 76px; }
 
+/* ===== Inputs e filtros (mínimo) ===== */
+.input{
+  width: 100%;
+  border-radius: 12px;
+  padding: 12px 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  color: rgba(255,255,255,.92);
+  outline: none;
+}
+.input:focus{
+  border-color: rgba(102,242,218,.55);
+}
+
+/* ===== Segmented ===== */
+.segmented{
+  display:flex;
+  gap:6px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.02);
+}
+.seg-btn{
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  color: rgba(255,255,255,.85);
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.seg-btn.active{
+  border-color: rgba(102,242,218,.55);
+  color: rgba(102,242,218,.98);
+  background: rgba(102,242,218,.08);
+}
+
+/* ===== List ===== */
+.list-item{
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
 
