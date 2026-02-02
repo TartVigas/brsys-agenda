@@ -29,12 +29,11 @@ function isValidEmail(email) {
 
 function getNext() {
   const params = new URLSearchParams(window.location.search);
-  // default: app.html
   return params.get("next") || "/app.html";
 }
 
 function buildRedirectToEntrar() {
-  // o link do e-mail deve voltar para o entrar.html com o mesmo next
+  // o link do e-mail deve voltar para o entrar.html mantendo o next
   const next = encodeURIComponent(getNext());
   return `${window.location.origin}/entrar.html?next=${next}`;
 }
@@ -45,75 +44,13 @@ async function redirectIfLoggedIn() {
   if (error) console.error("[entrar] getSession error:", error);
 
   if (session) {
-    const next = getNext();
-    window.location.replace(next);
+    window.location.replace(getNext());
     return true;
   }
   return false;
 }
 
-async function sendMagicLink(email) {
-  setMsg("Enviando link de acesso...", "info");
-  setLoading(true);
-
-  const emailRedirectTo = buildRedirectToEntrar();
-
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo,
-      shouldCreateUser: true,
-    },
-  });
-
-  setLoading(false);
-
-  if (error) {
-    console.error("[entrar] signInWithOtp error:", error);
-    setMsg("Erro ao enviar link. Tente novamente em instantes.", "error");
-    return;
-  }
-
-  setMsg("Pronto! Verifique seu e-mail (entrada ou spam).", "ok");
-}
-
-/* ========= Events ========= */
-form?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const email = (emailInput?.value || "").trim();
-
-  if (!isValidEmail(email)) {
-    setMsg("Digite um e-mail válido.", "error");
-    emailInput?.focus();
-    return;
-  }
-
-  await sendMagicLink(email);
-});
-
-btnSend?.addEventListener("click", async (e) => {
-  if (form) return;
-  e.preventDefault();
-
-  const email = (emailInput?.value || "").trim();
-  if (!isValidEmail(email)) {
-    setMsg("Digite um e-mail válido.", "error");
-    emailInput?.focus();
-    return;
-  }
-
-  await sendMagicLink(email);
-});
-
-/* ========= Boot ========= */
-(async () => {
-  // se já estiver logado, sai daqui e vai pro destino
-  const moved = await redirectIfLoggedIn();
-  if (!moved) {
-    setMsg("Digite seu e-mail para receber o link de acesso.", "info");
-  }
-})();
+// trava simples anti-duplo clique / anti-submit duplo
 let sending = false;
 
 async function sendMagicLink(email) {
@@ -137,9 +74,39 @@ async function sendMagicLink(email) {
   setLoading(false);
 
   if (error) {
-    setMsg("Erro ao enviar link. Tente novamente.", "error");
+    console.error("[entrar] signInWithOtp error:", error);
+    setMsg("Erro ao enviar link. Tente novamente em instantes.", "error");
     return;
   }
 
   setMsg("Pronto! Verifique seu e-mail (entrada ou spam).", "ok");
 }
+
+/* ========= Handlers ========= */
+async function handleSubmit(e) {
+  e?.preventDefault?.();
+
+  const email = (emailInput?.value || "").trim();
+
+  if (!isValidEmail(email)) {
+    setMsg("Digite um e-mail válido.", "error");
+    emailInput?.focus();
+    return;
+  }
+
+  await sendMagicLink(email);
+}
+
+form?.addEventListener("submit", handleSubmit);
+
+// fallback: se o botão existir fora do form, ou se alguém mexer no HTML depois
+btnSend?.addEventListener("click", (e) => {
+  if (form) return; // submit já cuida
+  handleSubmit(e);
+});
+
+/* ========= Boot ========= */
+(async () => {
+  const moved = await redirectIfLoggedIn();
+  if (!moved) setMsg("Digite seu e-mail para receber o link de acesso.", "info");
+})();
