@@ -1,1 +1,55 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hoje • BRsys Agenda</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="app">
+
+  <header class="topbar">
+    <a class="brand" href="/hoje.html">BRsys Agenda</a>
+    <div class="topbar-right">
+      <div id="hotelBadge"></div>
+      <div id="userInfo"></div>
+      <button id="logout" class="btn ghost">Sair</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <a href="/hoje.html" class="tab active">Hoje</a>
+    <a href="/reservas.html" class="tab">Reservas</a>
+    <a href="/hospedes.html" class="tab">Hóspedes</a>
+    <a href="/templates.html" class="tab">Templates</a>
+    <a href="/conta.html" class="tab">Conta</a>
+  </nav>
+
+  <main class="container">
+    <h1>Hoje</h1>
+    <section class="card">
+      <div id="todaySummary" class="muted">Carregando…</div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Chegadas</h2>
+        <div id="arrivals"></div>
+      </div>
+
+      <div class="card">
+        <h2>Saídas</h2>
+        <div id="departures"></div>
+      </div>
+
+      <div class="card">
+        <h2>Hospedados</h2>
+        <div id="inhouse"></div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/js/hoje.js"></script>
+</body>
+</html>
 
