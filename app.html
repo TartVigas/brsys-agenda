@@ -24,7 +24,7 @@
 
 <body class="app-body">
 
-  <!-- Topbar -->
+    <!-- Topbar -->
   <header class="topbar">
     <div class="wrap topbar-inner">
       <div class="brand">
@@ -97,5 +97,46 @@
   <script type="module" src="/js/auth.js"></script>
   <script type="module" src="/js/app.js"></script>
 
+  <!-- Modal Nova Reserva -->
+<div id="modalBackdrop" class="modal-backdrop hidden">
+  <div class="modal">
+    <h2>Nova reserva</h2>
+
+    <form id="formReserva">
+      <label>
+        Nome do hóspede
+        <input type="text" id="nome" required />
+      </label>
+
+      <label>
+        WhatsApp
+        <input type="text" id="whatsapp" placeholder="(11) 99999-9999" />
+      </label>
+
+      <div class="grid-2">
+        <label>
+          Check-in
+          <input type="text" id="checkin" placeholder="DD/MM/AAAA" required />
+        </label>
+
+        <label>
+          Check-out
+          <input type="text" id="checkout" placeholder="DD/MM/AAAA" required />
+        </label>
+      </div>
+
+      <label>
+        Observações
+        <textarea id="obs" rows="2"></textarea>
+      </label>
+
+      <div class="modal-actions">
+        <button type="button" id="cancelar" class="btn outline">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar reserva</button>
+      </div>
+    </form>
+  </div>
+</div>
+  
 </body>
 </html>
