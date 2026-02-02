@@ -3,11 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-
-  <title>Reserva • BRsys Agenda</title>
+  <title>Reserva • Agenda BRsys</title>
 
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Detalhe e edição de reserva na Agenda BRsys." />
+  <meta name="description" content="Detalhes e edição da reserva na Agenda BRsys." />
   <link rel="canonical" href="https://agenda.brsys.com.br/reserva.html" />
 
   <link rel="icon" type="image/png" href="/img/favicon.png" />
@@ -23,7 +22,7 @@
     <div class="wrap topbar-inner">
       <div class="brand">
         <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
-        <div class="brand-sub muted">Reserva • V1</div>
+        <div class="brand-sub muted">Reserva • edição inline • V1</div>
       </div>
 
       <div class="userbox">
@@ -36,100 +35,84 @@
 
   <main class="wrap main">
 
-    <!-- Loading -->
-    <section id="stateLoading" class="card">
-      <h1 class="h1">Carregando reserva…</h1>
-      <p class="muted">Aguarde um instante.</p>
-      <div class="skeleton">
-        <div class="sk-line"></div>
-        <div class="sk-line"></div>
-        <div class="sk-line"></div>
-      </div>
-    </section>
+    <section class="card">
 
-    <!-- Not found -->
-    <section id="stateNotFound" class="card" style="display:none;">
-      <h1 class="h1">Reserva não encontrada</h1>
-      <p class="muted">
-        Pode ser um link inválido ou você não tem acesso a essa reserva (RLS).
-      </p>
-      <div class="row" style="gap:10px;flex-wrap:wrap;">
-        <a id="btnBackNF" class="btn primary" href="/reservas.html">Voltar</a>
-        <a class="btn outline" href="/app.html">Home</a>
-      </div>
-    </section>
-
-    <!-- Form -->
-    <section id="stateForm" class="card" style="display:none;">
-      <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-        <div>
-          <h1 class="h1" style="margin:0;">Editar reserva</h1>
-          <div id="meta" class="muted small" style="margin-top:6px;"></div>
-        </div>
-
-        <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;">
-          <a id="btnWhats" class="btn outline" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">
-            WhatsApp
-          </a>
-          <a id="btnBack" class="btn outline" href="/reservas.html">Voltar</a>
+      <!-- Loading -->
+      <div id="stateLoading">
+        <h1 class="h1">Carregando reserva…</h1>
+        <p class="muted">Aguarde um instante.</p>
+        <div class="skeleton">
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
         </div>
       </div>
 
-      <form id="formReserva" autocomplete="off" style="margin-top:14px;">
-        <label class="label">
-          Nome do hóspede
-          <input class="input" type="text" id="nome" required />
-        </label>
-
-        <label class="label" style="margin-top:12px;">
-          WhatsApp
-          <input class="input" type="text" id="whatsapp" placeholder="(13) 99740-8157" inputmode="numeric" />
-          <div class="muted small" style="margin-top:6px;">
-            Se tiver WhatsApp, habilita o botão de 1 clique.
-          </div>
-        </label>
-
-        <div class="grid-2" style="margin-top:12px;">
-          <label class="label">
-            Check-in
-            <input class="input" type="text" id="checkin" required placeholder="DD/MM/AAAA" inputmode="numeric" />
-          </label>
-
-          <label class="label">
-            Check-out
-            <input class="input" type="text" id="checkout" required placeholder="DD/MM/AAAA" inputmode="numeric" />
-          </label>
-        </div>
-
-        <label class="label" style="margin-top:12px;">
-          Observações
-          <textarea class="input" id="obs" rows="3" placeholder="Ex: Quarto 03, pagamento na chegada…"></textarea>
-        </label>
-
-        <label class="label" style="margin-top:12px;">
-          Status (V1)
-          <select class="input" id="status">
-            <option value="pendente">Pendente</option>
-            <option value="confirmada">Confirmada</option>
-            <option value="cancelada">Cancelada</option>
-          </select>
-          <div class="muted small" style="margin-top:6px;">
-            Se sua tabela não tiver coluna <span class="mono">status</span>, o sistema ignora.
-          </div>
-        </label>
-
-        <div id="msg" class="muted small" style="margin-top:10px;"></div>
+      <!-- Not found -->
+      <div id="stateNotFound" style="display:none;">
+        <h1 class="h1">Reserva não encontrada</h1>
+        <p class="muted">Pode ter sido removida ou o link está incompleto.</p>
 
         <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;">
-          <button id="btnSalvar" type="submit" class="btn primary">Salvar alterações</button>
-          <button id="btnExcluir" type="button" class="btn outline">Excluir</button>
+          <a class="btn outline" href="/reservas.html">Voltar para Reservas</a>
+          <a class="btn" href="/reserva-nova.html">+ Nova reserva</a>
         </div>
-      </form>
+      </div>
+
+      <!-- Form -->
+      <div id="stateForm" style="display:none;">
+        <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <h1 class="h1" style="margin:0;">Reserva</h1>
+          <a class="btn outline" href="/reservas.html">Voltar</a>
+        </div>
+
+        <div id="meta" class="muted small" style="margin-top:8px;"></div>
+
+        <form id="formReserva" autocomplete="off" style="margin-top:14px;">
+          <label class="label">
+            Nome do hóspede
+            <input class="input" type="text" id="nome" name="nome" required placeholder="Ex: João da Silva" />
+          </label>
+
+          <label class="label" style="margin-top:12px;">
+            WhatsApp
+            <input class="input" type="text" id="whatsapp" name="whatsapp" placeholder="(13) 99740-8157" inputmode="numeric" />
+            <div class="muted small" style="margin-top:6px;">Dica: use para abrir conversa com 1 clique.</div>
+          </label>
+
+          <div class="grid-2" style="margin-top:12px;">
+            <label class="label">
+              Check-in
+              <input class="input" type="date" id="checkin" name="checkin" required />
+            </label>
+
+            <label class="label">
+              Check-out
+              <input class="input" type="date" id="checkout" name="checkout" required />
+            </label>
+          </div>
+
+          <label class="label" style="margin-top:12px;">
+            Observações
+            <textarea class="input" id="obs" name="obs" rows="3" placeholder="Ex: Quarto 03, pagamento na chegada…"></textarea>
+          </label>
+
+          <div id="msg" class="muted small" style="margin-top:10px;"></div>
+
+          <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;">
+            <button id="btnSalvar" type="submit" class="btn primary" disabled>Salvar alterações</button>
+            <button id="btnExcluir" type="button" class="btn outline">Excluir</button>
+            <a id="btnWhats" class="btn outline" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">WhatsApp</a>
+          </div>
+        </form>
+      </div>
+
     </section>
 
     <footer class="foot muted small">
       BRsys Agenda • V1 • suporte via WhatsApp
     </footer>
+
   </main>
 
   <!-- Bottom Nav -->
@@ -140,13 +123,10 @@
     <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
   </nav>
 
-  <!-- Guard + userEmail -->
+  <!-- Guard + user email -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
-    const user = await requireAuth({
-      redirectTo: "/entrar.html?next=" + encodeURIComponent(window.location.pathname + window.location.search),
-      renderUserInfo: false
-    });
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/reserva.html", renderUserInfo: false });
     const el = document.getElementById("userEmail");
     if (el) el.textContent = user?.email || "(sem e-mail)";
   </script>
