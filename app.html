@@ -149,6 +149,27 @@
       </div>
     </section>
 
+    <!-- Quartos (grid) -->
+<section class="card" style="margin-top:14px;">
+  <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+    <h2 class="h2" style="margin:0;">Quartos</h2>
+    <a class="muted small" href="/quartos.html">Gerenciar →</a>
+  </div>
+
+  <div id="roomsLoading" style="margin-top:10px;">
+    <p class="muted">Carregando quartos…</p>
+  </div>
+
+  <div id="roomsEmpty" style="display:none;margin-top:12px;">
+    <p class="muted" style="margin:0;">Nenhum quarto cadastrado.</p>
+    <div class="cta-row" style="margin-top:10px;">
+      <a class="btn primary" href="/quartos.html">Cadastrar quartos</a>
+    </div>
+  </div>
+
+  <div id="roomsGrid" style="display:none;margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
+</section>
+    
     <!-- Últimas reservas -->
     <section class="card" style="margin-top:14px;">
       <div class="row" style="align-items:center;justify-content:space-between;">
