@@ -3,53 +3,131 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Hoje • BRsys Agenda</title>
+  <title>Hoje • Agenda BRsys</title>
+
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Resumo do dia: chegadas, saídas e reservas futuras na Agenda BRsys." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/hoje.html" />
+
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/favicon.png" />
+
   <link rel="stylesheet" href="/css/app.css" />
 </head>
-<body class="app">
 
+<body class="app-body">
+
+  <!-- Topbar -->
   <header class="topbar">
-    <a class="brand" href="/hoje.html">BRsys Agenda</a>
-    <div class="topbar-right">
-      <div id="hotelBadge"></div>
-      <div id="userInfo"></div>
-      <button id="logout" class="btn ghost">Sair</button>
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span class="brand-name">Agenda BRsys</span>
+      </div>
+
+      <div class="topbar-actions">
+        <a class="btn sm ghost" href="/reservas.html">Reservas</a>
+        <a class="btn sm" href="/reserva-nova.html">+ Nova</a>
+      </div>
     </div>
   </header>
 
-  <nav class="tabs">
-    <a href="/hoje.html" class="tab active">Hoje</a>
-    <a href="/reservas.html" class="tab">Reservas</a>
-    <a href="/hospedes.html" class="tab">Hóspedes</a>
-    <a href="/templates.html" class="tab">Templates</a>
-    <a href="/conta.html" class="tab">Conta</a>
-  </nav>
+  <!-- Main -->
+  <main class="app-main">
 
-  <main class="container">
-    <h1>Hoje</h1>
-    <section class="card">
-      <div id="todaySummary" class="muted">Carregando…</div>
-    </section>
-
-    <section class="grid">
-      <div class="card">
-        <h2>Chegadas</h2>
-        <div id="arrivals"></div>
+    <!-- Header -->
+    <section class="page-head">
+      <div class="page-head-left">
+        <h1 class="h1">Hoje</h1>
+        <p class="muted">Resumo rápido do dia. <span class="pill" data-kpi="hoje" id="hojeLabel">—</span></p>
       </div>
 
-      <div class="card">
-        <h2>Saídas</h2>
-        <div id="departures"></div>
-      </div>
-
-      <div class="card">
-        <h2>Hospedados</h2>
-        <div id="inhouse"></div>
+      <div class="page-head-right">
+        <div class="kpi">
+          <div class="kpi-label">Futuras</div>
+          <div class="kpi-value" data-kpi="futuras" id="futurasCount">—</div>
+        </div>
       </div>
     </section>
+
+    <!-- Msg -->
+    <div id="hojeMsg" class="form-msg" style="display:none;"></div>
+
+    <!-- Grid -->
+    <section class="grid-2">
+
+      <!-- Chegadas -->
+      <section class="card">
+        <div class="card-head">
+          <h2 class="h2">Chegadas hoje</h2>
+          <span class="pill">check-in</span>
+        </div>
+
+        <div id="chegadasList" data-list="chegadas">
+          <div class="empty">Carregando chegadas…</div>
+        </div>
+      </section>
+
+      <!-- Saídas -->
+      <section class="card">
+        <div class="card-head">
+          <h2 class="h2">Saídas hoje</h2>
+          <span class="pill">check-out</span>
+        </div>
+
+        <div id="saidasList" data-list="saidas">
+          <div class="empty">Carregando saídas…</div>
+        </div>
+      </section>
+
+    </section>
+
+    <!-- Dica rápida -->
+    <section class="card subtle">
+      <div class="card-head">
+        <h2 class="h2">Ação rápida</h2>
+        <span class="pill">atalho</span>
+      </div>
+
+      <p class="muted" style="margin:0;">
+        Se aparecer alguém chegando ou saindo hoje, você pode abrir a reserva e chamar no WhatsApp em 1 clique.
+      </p>
+    </section>
+
   </main>
 
+  <!-- Bottom Nav (mobile-first) -->
+  <nav class="bottomnav" aria-label="Navegação">
+    <a class="bottomnav-item" href="/app.html">
+      <span class="bottomnav-ico" aria-hidden="true">📅</span>
+      <span class="bottomnav-txt">Agenda</span>
+    </a>
+
+    <a class="bottomnav-item" href="/reservas.html">
+      <span class="bottomnav-ico" aria-hidden="true">📚</span>
+      <span class="bottomnav-txt">Reservas</span>
+    </a>
+
+    <a class="bottomnav-item active" href="/hoje.html" aria-current="page">
+      <span class="bottomnav-ico" aria-hidden="true">⚡</span>
+      <span class="bottomnav-txt">Hoje</span>
+    </a>
+
+    <a class="bottomnav-item" href="/conta.html">
+      <span class="bottomnav-ico" aria-hidden="true">👤</span>
+      <span class="bottomnav-txt">Conta</span>
+    </a>
+  </nav>
+
+  <!-- Scripts -->
+  <script type="module" src="/js/auth.js"></script>
+  <script type="module">
+    import { requireAuth } from "/js/auth.js";
+    requireAuth({ redirectTo: "/entrar.html?next=/hoje.html" });
+  </script>
+
+  <script type="module" src="/js/nav.js"></script>
   <script type="module" src="/js/hoje.js"></script>
+
 </body>
 </html>
-
