@@ -386,3 +386,24 @@ body {
   margin-bottom: 10px;
 }
 
+/* Reservas list — micro ajustes */
+.list-head{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin: 10px 0 14px;
+}
+.list-title{ display:flex; align-items:baseline; gap:10px; }
+.stack{ display:grid; gap:12px; }
+
+.reserva-row .row-top{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:12px;
+}
+.reserva-row .row-title{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.reserva-row .row-meta{
+  margin-top: 6px;
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.reserva-row .row-notes{ margin-top: 10px; }
+.meta-sep{ opacity:.6; }
