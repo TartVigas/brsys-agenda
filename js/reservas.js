@@ -1,394 +1,291 @@
-// /js/reservas.js
-import { supabase } from "./supabase.js";
-import { requireAuth } from "./auth.js";
+import { supabase } from "/js/supabase.js";
+import { requireAuth } from "/js/auth.js";
 
-/* =========================
-   DOM
-========================= */
-const elSummary = document.getElementById("summary");
-const elQ = document.getElementById("q");
-const elMsg = document.getElementById("msg");
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-const stateLoading = document.getElementById("stateLoading");
-const stateEmpty = document.getElementById("stateEmpty");
-const stateList = document.getElementById("stateList");
-const elList = document.getElementById("list");
+const elLoading = $("#stateLoading");
+const elEmpty = $("#stateEmpty");
+const elListWrap = $("#stateList");
+const elList = $("#list");
+const elSummary = $("#summary");
+const elMsg = $("#msg");
+const elQ = $("#q");
 
-const filterBtns = Array.from(document.querySelectorAll("[data-filter]"));
+let USER = null;
+let ALL = [];
+let FILTER = "all"; // all | today | future | past
 
-/* =========================
-   Helpers
-========================= */
-const onlyDigits = (s = "") => String(s || "").replace(/\D/g, "");
-const esc = (s = "") =>
-  String(s || "")
+function show(which) {
+  if (elLoading) elLoading.style.display = which === "loading" ? "" : "none";
+  if (elEmpty) elEmpty.style.display = which === "empty" ? "" : "none";
+  if (elListWrap) elListWrap.style.display = which === "list" ? "" : "none";
+}
+
+function pad2(n){ return String(n).padStart(2,"0"); }
+function todayISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+
+function formatDateBR(iso) {
+  if (!iso || typeof iso !== "string") return "—";
+  const [y,m,d] = iso.split("-");
+  if (!y || !m || !d) return "—";
+  return `${d}/${m}/${y}`;
+}
+
+function normalizePhoneBR(raw) {
+  const s = String(raw || "").replace(/\D/g, "");
+  if (!s) return "";
+  if (s.startsWith("55")) return s;
+  if (s.length === 10 || s.length === 11) return `55${s}`; // DDD+numero
+  return s;
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-
-function setMsg(text = "", type = "info") {
-  if (!elMsg) return;
-  elMsg.textContent = text || "";
-  elMsg.style.display = text ? "block" : "none";
-  elMsg.style.color =
-    type === "error" ? "rgba(255,120,120,.95)" :
-    type === "ok"    ? "rgba(102,242,218,.95)" :
-                       "rgba(255,255,255,.70)";
 }
 
-function showState(which) {
-  if (stateLoading) stateLoading.style.display = which === "loading" ? "" : "none";
-  if (stateEmpty) stateEmpty.style.display = which === "empty" ? "" : "none";
-  if (stateList) stateList.style.display = which === "list" ? "" : "none";
-}
+/**
+ * status lógico para filtro e pill
+ * - today: checkin==hoje OR checkout==hoje OR (checkin<hoje && checkout>hoje)  -> "Hoje/Em andamento" (aqui usamos today pra dar prioridade)
+ * - future: checkin>hoje
+ * - past: checkout<hoje OR status encerrada
+ */
+function statusFrom(r) {
+  const stDb = (r.status || "").toLowerCase();
+  if (stDb.includes("encerr")) return { key: "past", label: "Encerrada" };
 
-function todayISO() {
-  // local (BR) em YYYY-MM-DD (sem timezone bug)
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
+  const t = todayISO();
+  const ci = r.checkin || r.checkin_date || "";
+  const co = r.checkout || r.checkout_date || "";
 
-function fmtBRDate(iso) {
-  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "—";
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-/* WhatsApp: DB = 55..., UI = (DD) 99999-9999 */
-function normalizeWhatsappTo55(raw) {
-  const d = onlyDigits(raw);
-  if (!d) return "";
-  if (d.startsWith("55")) return d;
-  if (d.length === 10 || d.length === 11) return "55" + d;
-  return d;
-}
-
-function validateWhatsapp55(w) {
-  if (!/^\d+$/.test(w)) return false;
-  if (!w.startsWith("55")) return false;
-  if (!(w.length === 12 || w.length === 13)) return false;
-  const ddd = w.slice(2, 4);
-  if (ddd === "00") return false;
-  return true;
-}
-
-function formatWhatsappBRFrom55(v) {
-  const d = onlyDigits(v);
-  if (!d) return "—";
-  const br = d.startsWith("55") ? d.slice(2) : d; // remove 55 p/ exibir
-  if (br.length < 10) return br;
-
-  const ddd = br.slice(0, 2);
-  const num = br.slice(2);
-
-  if (num.length === 9) return `(${ddd}) ${num.slice(0, 5)}-${num.slice(5)}`;
-  return `(${ddd}) ${num.slice(0, 4)}-${num.slice(4)}`;
-}
-
-function toWaLinkFrom55(phone55, text = "") {
-  const w = normalizeWhatsappTo55(phone55);
-  if (!validateWhatsapp55(w)) return null;
-  const q = text ? `?text=${encodeURIComponent(text)}` : "";
-  return `https://wa.me/${w}${q}`;
-}
-
-function periodLabel(checkin, checkout) {
-  return `${fmtBRDate(checkin)} — ${fmtBRDate(checkout)}`;
-}
-
-/* =========================
-   State
-========================= */
-let USER = null;
-let ALL = [];               // tudo do DB
-let FILTERED = [];          // depois de filtro+busca
-let currentFilter = "all";  // all | today | future | past
-
-// quartos (fallback / render)
-let ROOM_MAP = new Map();   // id -> {id,codigo,nome}
-
-/* =========================
-   Quarto label helpers
-========================= */
-function roomLabelFromRow(r) {
-  // Prioridade:
-  // 1) JOIN: r.quarto (obj)
-  // 2) fallback map: ROOM_MAP.get(r.quarto_id)
-  // 3) sem quarto
-  const qJoin = r?.quarto;
-  if (qJoin && (qJoin.codigo || qJoin.nome)) {
-    const cod = qJoin.codigo ? String(qJoin.codigo) : "—";
-    const nome = qJoin.nome ? String(qJoin.nome) : "—";
-    return `${cod} • ${nome}`;
+  // Se estiver rolando (entre datas) ou bate em hoje
+  if ((ci && ci === t) || (co && co === t) || (ci && co && ci < t && co > t)) {
+    // diferencia label
+    if (ci < t && co > t) return { key: "today", label: "Em andamento" };
+    return { key: "today", label: "Hoje" };
   }
 
-  if (r?.quarto_id) {
-    const q = ROOM_MAP.get(r.quarto_id);
-    if (q) {
-      const cod = q.codigo ? String(q.codigo) : "—";
-      const nome = q.nome ? String(q.nome) : "—";
-      return `${cod} • ${nome}`;
+  if (ci && ci > t) return { key: "future", label: "Futura" };
+
+  // fallback: se checkout já passou
+  if (co && co < t) return { key: "past", label: "Passada" };
+
+  return { key: "all", label: "Ativa" };
+}
+
+function roomLabel(quarto) {
+  if (!quarto) return "Sem quarto";
+  const codigo = (quarto.codigo || "").trim();
+  const nome = (quarto.nome || "").trim();
+  if (codigo && nome) return `${codigo} • ${nome}`;
+  if (codigo) return codigo;
+  if (nome) return nome;
+  return "Quarto";
+}
+
+function buildCard(r) {
+  const guest = (r.nome_hospede || r.guest_name || "").trim() || "Hóspede";
+  const whats = r.whatsapp || r.guest_whatsapp || "";
+  const phone = normalizePhoneBR(whats);
+  const wa = phone ? `https://wa.me/${phone}` : "";
+
+  const ci = r.checkin || r.checkin_date || "";
+  const co = r.checkout || r.checkout_date || "";
+
+  const st = statusFrom(r);
+  const room = roomLabel(r.agenda_quartos || r.quarto || r.quartos);
+
+  const notes = (r.observacoes || r.notes || "").trim();
+
+  const card = document.createElement("article");
+  card.className = "card";
+  card.style.marginTop = "12px";
+  card.setAttribute("role", "button");
+  card.tabIndex = 0;
+
+  card.innerHTML = `
+    <div class="row" style="align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div style="min-width:220px;">
+        <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap;">
+          <div class="h2" style="margin:0;">${escapeHtml(guest)}</div>
+          <span class="pill">${escapeHtml(st.label)}</span>
+        </div>
+
+        <div class="muted small" style="margin-top:6px;">
+          <span class="mono">${escapeHtml(room)}</span>
+          <span style="opacity:.6"> • </span>
+          <span>${escapeHtml(formatDateBR(ci))} → ${escapeHtml(formatDateBR(co))}</span>
+        </div>
+
+        ${notes ? `<div class="muted small" style="margin-top:10px;">${escapeHtml(notes)}</div>` : ""}
+      </div>
+
+      <div class="row" style="gap:10px;flex-wrap:wrap;">
+        ${wa ? `<a class="btn outline small" href="${wa}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}
+        <a class="btn primary small" href="/reserva.html?id=${encodeURIComponent(r.id)}">Abrir</a>
+      </div>
+    </div>
+  `;
+
+  // Clique no card abre (mas não interfere nos links)
+  const open = () => (window.location.href = `/reserva.html?id=${encodeURIComponent(r.id)}`);
+  card.addEventListener("click", (e) => {
+    if (e.target && e.target.closest && e.target.closest("a")) return;
+    open();
+  });
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      open();
     }
-    return "Quarto vinculado";
+  });
+
+  return card;
+}
+
+function applyUIActiveFilterButtons() {
+  $$("button[data-filter]").forEach((b) => {
+    const v = b.getAttribute("data-filter");
+    // mantém teu visual: troca outline -> primary no ativo
+    if (v === FILTER) {
+      b.classList.remove("outline");
+      if (!b.classList.contains("primary")) b.classList.add("primary");
+    } else {
+      b.classList.remove("primary");
+      if (!b.classList.contains("outline")) b.classList.add("outline");
+    }
+  });
+}
+
+function filterData(list) {
+  const q = (elQ?.value || "").trim().toLowerCase();
+
+  let out = list;
+
+  if (FILTER !== "all") {
+    out = out.filter((r) => statusFrom(r).key === FILTER);
   }
 
-  return "(sem quarto)";
+  if (q) {
+    out = out.filter((r) => {
+      const name = String(r.nome_hospede || r.guest_name || "").toLowerCase();
+      const wa = String(r.whatsapp || r.guest_whatsapp || "").toLowerCase();
+      return name.includes(q) || wa.includes(q);
+    });
+  }
+
+  // Ordenação: hoje/em andamento primeiro, depois futuras, depois passadas
+  const weight = { today: 0, future: 1, past: 2, all: 9 };
+  out = out.slice().sort((a, b) => {
+    const sa = statusFrom(a).key;
+    const sb = statusFrom(b).key;
+    const wa = weight[sa] ?? 9;
+    const wb = weight[sb] ?? 9;
+    if (wa !== wb) return wa - wb;
+
+    const cia = (a.checkin || a.checkin_date || "");
+    const cib = (b.checkin || b.checkin_date || "");
+    return String(cia).localeCompare(String(cib));
+  });
+
+  return out;
 }
 
-/* =========================
-   Query DB
-========================= */
-async function fetchRoomsFallback(user_id) {
-  // usado apenas se JOIN falhar ou para completar map
-  const { data, error } = await supabase
-    .from("agenda_quartos")
-    .select("id,codigo,nome")
-    .eq("user_id", user_id);
+function render() {
+  applyUIActiveFilterButtons();
 
-  if (error) throw error;
+  const list = filterData(ALL);
 
-  ROOM_MAP = new Map((data || []).map(q => [q.id, q]));
-}
+  if (elSummary) {
+    elSummary.textContent = `${list.length} reserva(s) exibidas • ${ALL.length} no total`;
+  }
 
-async function fetchReservas() {
-  showState("loading");
-  setMsg("");
-
-  const { data: authData, error: authErr } = await supabase.auth.getUser();
-  if (authErr) throw authErr;
-
-  const user_id = authData?.user?.id;
-  if (!user_id) throw new Error("Sessão expirada. Faça login novamente.");
-
-  // 1) tenta JOIN (se existir relacionamento/foreign key reconhecida)
-  // Observação: esse formato funciona quando o PostgREST consegue resolver a relação.
-  // Se não resolver, cai no catch e usa fallback.
-  try {
-    const { data, error } = await supabase
-      .from("agenda_reservas")
-      .select(`
-        id,user_id,nome_hospede,whatsapp,checkin,checkout,observacoes,created_at,updated_at,quarto_id,
-        quarto:agenda_quartos ( id,codigo,nome )
-      `)
-      .eq("user_id", user_id)
-      .order("checkin", { ascending: true })
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    ALL = Array.isArray(data) ? data : [];
-
-    // Prepara map também (não é obrigatório, mas ajuda se algo vier sem join)
-    // Se não existir nenhum quarto_id, nem busca.
-    const hasAnyRoom = ALL.some(r => !!r.quarto_id);
-    if (hasAnyRoom) {
-      await fetchRoomsFallback(user_id);
-    }
-
+  if (!ALL.length) {
+    show("empty");
     return;
-  } catch (e) {
-    // JOIN falhou (relationship não encontrado etc) -> fallback
-    console.warn("[reservas] JOIN quartos falhou, usando fallback:", e?.message || e);
   }
 
-  // 2) fallback: busca reservas + busca quartos e monta map
+  show("list");
+  if (elList) elList.innerHTML = "";
+
+  if (!list.length) {
+    if (elMsg) elMsg.textContent = "Nada encontrado com esse filtro/busca.";
+    return;
+  } else {
+    if (elMsg) elMsg.textContent = "";
+  }
+
+  list.forEach((r) => elList.appendChild(buildCard(r)));
+}
+
+async function load() {
+  show("loading");
+  if (elMsg) elMsg.textContent = "";
+  if (elSummary) elSummary.textContent = "Carregando…";
+
+  // garante auth (tu já tem guard no HTML, mas aqui fica blindado)
+  USER = await requireAuth({ redirectTo: "/entrar.html?next=/reservas.html", renderUserInfo: false });
+
   const { data, error } = await supabase
     .from("agenda_reservas")
-    .select("id,user_id,nome_hospede,whatsapp,checkin,checkout,observacoes,created_at,updated_at,quarto_id")
-    .eq("user_id", user_id)
-    .order("checkin", { ascending: true })
-    .order("created_at", { ascending: false });
+    .select(`
+      id,
+      user_id,
+      nome_hospede,
+      whatsapp,
+      checkin,
+      checkout,
+      observacoes,
+      status,
+      quarto_id,
+      updated_at,
+      agenda_quartos:quarto_id (
+        id,
+        codigo,
+        nome
+      )
+    `)
+    .eq("user_id", USER.id)
+    .order("checkin", { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    console.error(error);
+    if (elMsg) elMsg.textContent = "Erro ao carregar reservas.";
+    show("empty");
+    return;
+  }
 
   ALL = Array.isArray(data) ? data : [];
 
-  const hasAnyRoom = ALL.some(r => !!r.quarto_id);
-  if (hasAnyRoom) {
-    await fetchRoomsFallback(user_id);
-  }
-}
-
-/* =========================
-   Filtro + Busca
-========================= */
-function applyFilterAndSearch() {
-  const t = todayISO();
-  const q = (elQ?.value || "").trim().toLowerCase();
-  const qDigits = onlyDigits(q);
-
-  const base = ALL.filter((r) => {
-    const ci = r.checkin || "";
-    const co = r.checkout || "";
-
-    if (currentFilter === "today") return ci === t || co === t;
-    if (currentFilter === "future") return ci > t;
-    if (currentFilter === "past") return co < t;
-    return true;
-  });
-
-  const searched = base.filter((r) => {
-    if (!q) return true;
-
-    const nome = String(r.nome_hospede || "").toLowerCase();
-    const wa55 = normalizeWhatsappTo55(r.whatsapp || "");
-    const waDigits = onlyDigits(wa55);
-
-    // se digitou números, busca no whatsapp
-    if (qDigits) return waDigits.includes(qDigits);
-
-    // senão busca por nome e também por whatsapp em texto
-    return nome.includes(q) || waDigits.includes(onlyDigits(q));
-  });
-
-  FILTERED = searched;
-}
-
-/* =========================
-   Render
-========================= */
-function renderSummary() {
-  if (!elSummary) return;
-  const total = ALL.length;
-  const shown = FILTERED.length;
-
-  const d = new Date();
-  const br = d.toLocaleDateString("pt-BR");
-
-  elSummary.textContent = `Mostrando ${shown} de ${total} • Hoje: ${br}`;
-}
-
-function renderList() {
-  if (!elList) return;
-
-  if (!FILTERED.length) {
-    if (ALL.length) {
-      showState("list");
-      elList.innerHTML = `
-        <div class="muted">
-          Nenhuma reserva encontrada com esse filtro/busca.
-        </div>
-      `;
-      renderSummary();
-      return;
-    }
-
-    showState("empty");
+  if (!ALL.length) {
+    show("empty");
+    if (elSummary) elSummary.textContent = "0 reservas";
     return;
   }
 
-  showState("list");
-
-  const t = todayISO();
-
-  elList.innerHTML = FILTERED.map((r) => {
-    const id = r.id;
-    const nome = r.nome_hospede || "—";
-    const ci = r.checkin || "";
-    const co = r.checkout || "";
-    const obs = r.observacoes || "";
-    const wa55 = normalizeWhatsappTo55(r.whatsapp || "");
-    const waPretty = formatWhatsappBRFrom55(wa55);
-
-    const isToday = (ci === t || co === t);
-    const isFuture = (ci > t);
-    const tag = isToday ? "Hoje" : isFuture ? "Futura" : "Passada";
-
-    const quartoLabel = roomLabelFromRow(r);
-
-    const waLink = toWaLinkFrom55(wa55, `Olá ${nome}! Aqui é da recepção 🙂`) || "#";
-    const waDisabled = waLink === "#";
-
-    return `
-      <article class="card" style="margin-top:12px;">
-        <div class="row" style="align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <div style="min-width:220px;">
-            <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;">
-              <h3 class="h2" style="margin:0;font-size:18px;">${esc(nome)}</h3>
-              <span class="pill">${esc(tag)}</span>
-            </div>
-
-            <div class="muted small" style="margin-top:6px;">
-              Período: <strong>${esc(periodLabel(ci, co))}</strong>
-            </div>
-
-            <div class="muted small" style="margin-top:6px;">
-              Quarto: <span class="mono">${esc(quartoLabel)}</span>
-            </div>
-
-            <div class="muted small" style="margin-top:6px;">
-              WhatsApp: <span class="mono">${esc(waPretty)}</span>
-            </div>
-
-            ${obs ? `<div class="muted small" style="margin-top:8px;">Obs: ${esc(obs)}</div>` : ""}
-          </div>
-
-          <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;">
-            <a class="btn outline" ${waDisabled ? `style="opacity:.55;pointer-events:none;"` : ""} href="${esc(waLink)}" target="_blank" rel="noopener noreferrer">
-              WhatsApp
-            </a>
-            <a class="btn primary" href="/reserva.html?id=${encodeURIComponent(id)}">Abrir</a>
-          </div>
-        </div>
-      </article>
-    `;
-  }).join("");
-
-  renderSummary();
+  render();
 }
 
-function setActiveFilterBtn() {
-  filterBtns.forEach((b) => {
-    const on = b.dataset.filter === currentFilter;
-    b.classList.toggle("primary", on);
-    b.classList.toggle("outline", !on);
-  });
-}
-
-/* =========================
-   Events
-========================= */
-function bindEvents() {
-  elQ?.addEventListener("input", () => {
-    applyFilterAndSearch();
-    renderList();
-  });
-
-  filterBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      currentFilter = btn.dataset.filter || "all";
-      setActiveFilterBtn();
-      applyFilterAndSearch();
-      renderList();
+function bind() {
+  // filtro
+  $$("button[data-filter]").forEach((b) => {
+    b.addEventListener("click", () => {
+      FILTER = b.getAttribute("data-filter") || "all";
+      render();
     });
   });
+
+  // busca
+  elQ?.addEventListener("input", () => render());
 }
 
-/* =========================
-   Boot
-========================= */
-(async function boot() {
-  USER = await requireAuth({ redirectTo: "/entrar.html?next=/reservas.html", renderUserInfo: false });
-  if (!USER) return;
-
-  try {
-    await fetchReservas();
-    bindEvents();
-    setActiveFilterBtn();
-    applyFilterAndSearch();
-    renderList();
-
-    if (!ALL.length) showState("empty");
-  } catch (err) {
-    console.error("[reservas] boot error:", err);
-    showState("list");
-    setMsg(err?.message || "Erro ao carregar reservas. Verifique conexão/RLS.", "error");
-    if (elList) elList.innerHTML = `<div class="muted">Não foi possível carregar.</div>`;
-    if (elSummary) elSummary.textContent = "—";
-  }
-})();
+bind();
+load();
