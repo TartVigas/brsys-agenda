@@ -74,9 +74,22 @@
             <input class="input" type="text" id="nome" name="nome" required placeholder="Ex: João da Silva" />
           </label>
 
+          <!-- WhatsApp (melhorado: input + botão alinhados) -->
           <label class="label" style="margin-top:12px;">
             WhatsApp
-            <input class="input" type="text" id="whatsapp" name="whatsapp" placeholder="(13) 99740-8157" inputmode="numeric" />
+
+            <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;">
+              <input class="input" type="text" id="whatsapp" name="whatsapp"
+                placeholder="(13) 99740-8157" inputmode="numeric"
+                style="flex:1;min-width:240px;" />
+
+              <a id="btnWhats" class="btn outline"
+                 href="#" target="_blank" rel="noopener noreferrer"
+                 style="display:none;white-space:nowrap;">
+                Chamar no WhatsApp
+              </a>
+            </div>
+
             <div class="muted small" style="margin-top:6px;">Dica: use para abrir conversa com 1 clique.</div>
           </label>
 
@@ -102,7 +115,6 @@
           <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;">
             <button id="btnSalvar" type="submit" class="btn primary" disabled>Salvar alterações</button>
             <button id="btnExcluir" type="button" class="btn outline">Excluir</button>
-            <a id="btnWhats" class="btn outline" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">WhatsApp</a>
           </div>
         </form>
       </div>
