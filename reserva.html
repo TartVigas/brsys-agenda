@@ -6,7 +6,7 @@
   <title>Reserva • Agenda BRsys</title>
 
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Detalhes e edição da reserva na Agenda BRsys." />
+  <meta name="description" content="Detalhes, edição e conta da reserva na Agenda BRsys." />
   <link rel="canonical" href="https://agenda.brsys.com.br/reserva.html" />
 
   <link rel="icon" type="image/png" href="/img/favicon.png" />
@@ -22,7 +22,7 @@
     <div class="wrap topbar-inner">
       <div class="brand">
         <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
-        <div class="brand-sub muted">Reserva • edição inline • V1</div>
+        <div class="brand-sub muted">Reserva • edição + conta • V1</div>
       </div>
 
       <div class="userbox">
@@ -35,12 +35,14 @@
 
   <main class="wrap main">
 
+    <!-- CARD: Reserva -->
     <section class="card">
 
       <!-- Loading -->
       <div id="stateLoading">
         <h1 class="h1">Carregando reserva…</h1>
         <p class="muted">Aguarde um instante.</p>
+
         <div class="skeleton">
           <div class="sk-line"></div>
           <div class="sk-line"></div>
@@ -55,18 +57,23 @@
 
         <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;">
           <a class="btn outline" href="/reservas.html">Voltar para Reservas</a>
-          <a class="btn" href="/reserva-nova.html">+ Nova reserva</a>
+          <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
         </div>
       </div>
 
       <!-- Form -->
       <div id="stateForm" style="display:none;">
-        <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-          <h1 class="h1" style="margin:0;">Reserva</h1>
-          <a class="btn outline" href="/reservas.html">Voltar</a>
-        </div>
 
-        <div id="meta" class="muted small" style="margin-top:8px;"></div>
+        <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div>
+            <h1 class="h1" style="margin:0;">Reserva</h1>
+            <div id="meta" class="muted small" style="margin-top:6px;"></div>
+          </div>
+
+          <div class="row" style="gap:10px;flex-wrap:wrap;">
+            <a class="btn outline" href="/reservas.html">Voltar</a>
+          </div>
+        </div>
 
         <form id="formReserva" autocomplete="off" style="margin-top:14px;">
           <label class="label">
@@ -74,7 +81,7 @@
             <input class="input" type="text" id="nome" name="nome" required placeholder="Ex: João da Silva" />
           </label>
 
-          <!-- WhatsApp (melhorado: input + botão alinhados) -->
+          <!-- WhatsApp (input + botão) -->
           <label class="label" style="margin-top:12px;">
             WhatsApp
 
@@ -90,7 +97,9 @@
               </a>
             </div>
 
-            <div class="muted small" style="margin-top:6px;">Dica: use para abrir conversa com 1 clique.</div>
+            <div class="muted small" style="margin-top:6px;">
+              Dica: use para abrir conversa com 1 clique.
+            </div>
           </label>
 
           <div class="grid-2" style="margin-top:12px;">
@@ -117,8 +126,121 @@
             <button id="btnExcluir" type="button" class="btn outline">Excluir</button>
           </div>
         </form>
-      </div>
 
+        <!-- DIVISOR -->
+        <hr style="margin:18px 0;opacity:.15;" />
+
+        <!-- CARD: Conta (micro-PMS) -->
+        <section class="card" style="padding:14px;">
+          <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div>
+              <h2 class="h2" style="margin:0;">Conta</h2>
+              <div class="muted small" style="margin-top:6px;">
+                Lançamentos + Pagamentos vinculados à reserva.
+              </div>
+            </div>
+            <span id="contaStatus" class="pill">—</span>
+          </div>
+
+          <!-- Totais -->
+          <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+            <div class="card" style="padding:12px;min-width:180px;flex:1;">
+              <div class="muted small">Total</div>
+              <div id="totalLanc" class="h2" style="margin:6px 0 0;">R$ 0,00</div>
+            </div>
+
+            <div class="card" style="padding:12px;min-width:180px;flex:1;">
+              <div class="muted small">Pago</div>
+              <div id="totalPago" class="h2" style="margin:6px 0 0;">R$ 0,00</div>
+            </div>
+
+            <div class="card" style="padding:12px;min-width:180px;flex:1;">
+              <div class="muted small">Saldo</div>
+              <div id="saldo" class="h2" style="margin:6px 0 0;">R$ 0,00</div>
+            </div>
+          </div>
+
+          <hr style="margin:14px 0;opacity:.15;" />
+
+          <!-- Forms -->
+          <div class="grid-2" style="gap:14px;">
+
+            <!-- Lançamentos -->
+            <div>
+              <h3 class="h2" style="font-size:16px;margin:0;">Lançamentos</h3>
+
+              <form id="formLanc" style="margin-top:10px;">
+                <label class="label">
+                  Descrição
+                  <input id="lDesc" class="input" required placeholder="Ex: Diária, Porções, Late checkout..." />
+                </label>
+
+                <div class="grid-2" style="margin-top:10px;">
+                  <label class="label">
+                    Valor (R$)
+                    <input id="lValor" class="input" required inputmode="decimal" placeholder="Ex: 180,00" />
+                  </label>
+
+                  <label class="label">
+                    Tipo
+                    <select id="lTipo" class="input">
+                      <option value="diaria">Diária</option>
+                      <option value="extra" selected>Extra</option>
+                      <option value="ajuste">Ajuste</option>
+                    </select>
+                  </label>
+                </div>
+
+                <button class="btn primary" style="margin-top:10px;">+ Adicionar</button>
+              </form>
+
+              <div id="listaLanc" style="margin-top:12px;"></div>
+            </div>
+
+            <!-- Pagamentos -->
+            <div>
+              <h3 class="h2" style="font-size:16px;margin:0;">Pagamentos</h3>
+
+              <form id="formPag" style="margin-top:10px;">
+                <div class="grid-2">
+                  <label class="label">
+                    Forma
+                    <select id="pForma" class="input">
+                      <option value="pix">Pix</option>
+                      <option value="cartao">Cartão</option>
+                      <option value="dinheiro">Dinheiro</option>
+                    </select>
+                  </label>
+
+                  <label class="label">
+                    Valor (R$)
+                    <input id="pValor" class="input" required inputmode="decimal" placeholder="Ex: 180,00" />
+                  </label>
+                </div>
+
+                <label class="label" style="margin-top:10px;">
+                  Obs (opcional)
+                  <input id="pObs" class="input" placeholder="Ex: 2x cartão, comprovante..." />
+                </label>
+
+                <button class="btn primary" style="margin-top:10px;">+ Registrar</button>
+              </form>
+
+              <div id="listaPag" style="margin-top:12px;"></div>
+            </div>
+
+          </div>
+
+          <div id="contaMsg" class="muted small" style="margin-top:12px;"></div>
+
+          <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+            <button id="btnFecharConta" class="btn outline" disabled style="opacity:.55;">
+              Fechar conta / Checkout
+            </button>
+          </div>
+        </section>
+
+      </div>
     </section>
 
     <footer class="foot muted small">
@@ -145,5 +267,10 @@
 
   <script type="module" src="/js/nav.js"></script>
   <script type="module" src="/js/reserva.js"></script>
+
+  <!-- Conta (micro-PMS) -->
+  <!-- Ative quando criar o arquivo /js/reserva-conta.js -->
+  <script type="module" src="/js/reserva-conta.js"></script>
+
 </body>
 </html>
