@@ -22,16 +22,74 @@ function onlyDigits(s = "") {
   return String(s).replace(/\D/g, "");
 }
 
-function toWaLink(phoneRaw, text = "") {
-  const digits = onlyDigits(phoneRaw);
-  if (!digits) return null;
-
-  // assume BR default 55
-  const full = digits.startsWith("55") ? digits : `55${digits}`;
-  const qs = text ? `?text=${encodeURIComponent(text)}` : "";
-  return `https://wa.me/${full}${qs}`;
+/* =========================
+   WhatsApp (Round 2A)
+   - DB: 5511...
+   - UI: (11) 99999-9999
+========================= */
+function normalizeWhatsappTo55(raw) {
+  const d = onlyDigits(raw);
+  if (!d) return "";
+  if (d.startsWith("55")) return d;
+  if (d.length === 10 || d.length === 11) return "55" + d;
+  return d; // cai na validação
 }
 
+function validateWhatsapp55(w) {
+  if (!/^\d+$/.test(w)) return false;
+  if (!w.startsWith("55")) return false;
+  if (!(w.length === 12 || w.length === 13)) return false;
+  const ddd = w.slice(2, 4);
+  if (ddd === "00") return false;
+  return true;
+}
+
+function formatWhatsappBRFrom55(v) {
+  const d = onlyDigits(v);
+  if (!d) return "";
+  const br = d.startsWith("55") ? d.slice(2) : d;
+  if (br.length < 10) return br;
+
+  const ddd = br.slice(0, 2);
+  const num = br.slice(2);
+
+  // celular 9 dígitos -> 5-4, fixo 8 dígitos -> 4-4
+  if (num.length === 9) return `(${ddd}) ${num.slice(0, 5)}-${num.slice(5)}`;
+  return `(${ddd}) ${num.slice(0, 4)}-${num.slice(4)}`;
+}
+
+function maskWhatsappBR(el) {
+  if (!el) return;
+
+  const apply = () => {
+    let v = onlyDigits(el.value);
+
+    // Se user colou 55..., remove 55 para exibição
+    if (v.startsWith("55")) v = v.slice(2);
+
+    // limita a DDD + número (11 máx)
+    v = v.slice(0, 11);
+
+    if (v.length >= 7) el.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
+    else if (v.length >= 3) el.value = `(${v.slice(0, 2)}) ${v.slice(2)}`;
+    else el.value = v;
+  };
+
+  el.addEventListener("input", apply);
+  el.addEventListener("paste", () => setTimeout(apply, 0));
+  el.addEventListener("blur", apply);
+}
+
+function toWaLinkFrom55(phone55, text = "") {
+  const w = normalizeWhatsappTo55(phone55);
+  if (!validateWhatsapp55(w)) return null;
+  const q = text ? `?text=${encodeURIComponent(text)}` : "";
+  return `https://wa.me/${w}${q}`;
+}
+
+/* =========================
+   Msg / UI
+========================= */
 function setMsg(text = "", type = "info") {
   const el = document.getElementById("msg");
   if (!el) return;
@@ -70,9 +128,10 @@ function isoNowBR() {
    (contrato oficial)
 ========================= */
 function toFormModel(row) {
+  // IMPORTANTE: model.whatsapp deve manter o formato do DB (55...)
   return {
     nome: row?.nome_hospede ?? "",
-    whatsapp: row?.whatsapp ?? "",
+    whatsapp: row?.whatsapp ?? "", // 55...
     checkin: row?.checkin ?? "",
     checkout: row?.checkout ?? "",
     obs: row?.observacoes ?? "",
@@ -82,9 +141,12 @@ function toFormModel(row) {
 }
 
 function toDbPayload(model) {
+  // model.whatsapp aqui pode estar “bonito”, então normaliza p/ 55...
+  const whatsapp55 = normalizeWhatsappTo55(model.whatsapp);
+
   return {
     nome_hospede: model.nome || null,
-    whatsapp: model.whatsapp || null,
+    whatsapp: whatsapp55 || null,
     checkin: model.checkin || null,
     checkout: model.checkout || null,
     observacoes: model.obs || null,
@@ -109,6 +171,11 @@ function validate(model) {
     return "Check-out precisa ser depois do check-in.";
   }
 
+  // WhatsApp (Round 2A): obrigatório e válido
+  const w55 = normalizeWhatsappTo55(model.whatsapp);
+  if (!w55) return "Informe o WhatsApp do hóspede.";
+  if (!validateWhatsapp55(w55)) return "WhatsApp inválido. Use DDD + número (ex.: 11999998888).";
+
   return null;
 }
 
@@ -132,7 +199,7 @@ const btnWhats = document.getElementById("btnWhats");
 ========================= */
 let USER = null;
 let RESERVA_ID = null;
-let original = null; // snapshot do que veio do DB
+let original = null; // snapshot do DB (whatsapp em 55...)
 let saving = false;
 let deleting = false;
 
@@ -142,7 +209,7 @@ let deleting = false;
 function readModelFromForm() {
   return {
     nome: (nomeEl?.value || "").trim(),
-    whatsapp: (whatsEl?.value || "").trim(),
+    whatsapp: (whatsEl?.value || "").trim(), // pode estar bonito
     checkin: (checkinEl?.value || "").trim(),
     checkout: (checkoutEl?.value || "").trim(),
     obs: (obsEl?.value || "").trim(),
@@ -153,9 +220,13 @@ function isDirty() {
   if (!original) return false;
   const cur = readModelFromForm();
 
+  // compara whatsapp normalizado para 55... dos dois lados
+  const curW = normalizeWhatsappTo55(cur.whatsapp);
+  const origW = normalizeWhatsappTo55(original.whatsapp);
+
   return (
     cur.nome !== original.nome ||
-    cur.whatsapp !== original.whatsapp ||
+    curW !== origW ||
     cur.checkin !== original.checkin ||
     cur.checkout !== original.checkout ||
     cur.obs !== original.obs
@@ -169,17 +240,20 @@ function refreshSaveState() {
   if (err) {
     disableSave(true);
     setMsg(err, "error");
+    refreshWhatsButton(cur); // botão acompanha mesmo com erro
     return;
   }
 
   if (!isDirty()) {
     disableSave(true);
     setMsg("Sem alterações.", "info");
+    refreshWhatsButton(cur);
     return;
   }
 
   disableSave(false);
   setMsg("Alterações prontas para salvar.", "info");
+  refreshWhatsButton(cur);
 }
 
 function bindDirtyListeners() {
@@ -192,14 +266,15 @@ function bindDirtyListeners() {
 }
 
 /* =========================
-   WhatsApp button
+   WhatsApp button (Round 2A)
 ========================= */
 function refreshWhatsButton(model) {
   if (!btnWhats) return;
 
-  const name = model?.nome || "Olá";
-  const phone = model?.whatsapp || "";
-  const link = toWaLink(phone, `Olá ${name}! Aqui é da recepção 🙂`);
+  const name = (model?.nome || "Olá").trim() || "Olá";
+  const w55 = normalizeWhatsappTo55(model?.whatsapp || "");
+
+  const link = toWaLinkFrom55(w55, `Olá ${name}! Aqui é da recepção 🙂`);
 
   if (!link) {
     btnWhats.style.display = "none";
@@ -242,12 +317,18 @@ async function loadReserva() {
     return;
   }
 
-  // snapshot
+  // snapshot (DB)
   original = toFormModel(data);
 
   // fill form
   if (nomeEl) nomeEl.value = original.nome || "";
-  if (whatsEl) whatsEl.value = original.whatsapp || "";
+
+  // WhatsApp: exibe bonito, mas mantém original.whatsapp em 55...
+  if (whatsEl) {
+    whatsEl.value = formatWhatsappBRFrom55(original.whatsapp);
+    maskWhatsappBR(whatsEl);
+  }
+
   if (checkinEl) checkinEl.value = original.checkin || "";
   if (checkoutEl) checkoutEl.value = original.checkout || "";
   if (obsEl) obsEl.value = original.obs || "";
@@ -266,7 +347,10 @@ async function loadReserva() {
     `;
   }
 
-  refreshWhatsButton(original);
+  refreshWhatsButton({
+    ...original,
+    whatsapp: original.whatsapp // 55...
+  });
 
   showState("form");
   bindDirtyListeners();
@@ -319,7 +403,14 @@ async function saveReserva() {
 
   // atualiza snapshot + tela
   original = toFormModel(data);
-  refreshWhatsButton(original);
+
+  // re-render Whats bonito após salvar (garante consistência)
+  if (whatsEl) whatsEl.value = formatWhatsappBRFrom55(original.whatsapp);
+
+  refreshWhatsButton({
+    ...original,
+    whatsapp: original.whatsapp
+  });
 
   if (metaEl) {
     const created = original.created_at ? new Date(original.created_at).toLocaleString("pt-BR") : "—";
