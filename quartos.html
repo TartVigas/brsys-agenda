@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <title>Quartos • Agenda BRsys</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Configuração de quartos na Agenda BRsys." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/quartos.html" />
+
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/favicon.png" />
+
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+
+<body class="app-body">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-sub muted">Quartos • Configurações • V2</div>
+      </div>
+
+      <div class="userbox">
+        <div class="muted small">Logado:</div>
+        <div id="userEmail" class="mono small">carregando…</div>
+        <button id="logout" class="btn outline small">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap main">
+
+    <!-- Header ações -->
+    <section class="card">
+      <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <h1 class="h1" style="margin:0;">Quartos</h1>
+          <div class="muted small" style="margin-top:6px;">
+            Cadastre seus quartos para habilitar “confirmar entrada” e ocupação por quarto.
+          </div>
+        </div>
+
+        <div class="row" style="gap:10px;flex-wrap:wrap;">
+          <a class="btn outline" href="/conta.html">Voltar</a>
+          <a class="btn outline" href="/app.html">Home</a>
+        </div>
+      </div>
+
+      <div id="msg" class="muted small" style="margin-top:10px;"></div>
+
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+        <button id="btnSeed" class="btn outline small" type="button">Criar quartos padrão (01–10)</button>
+        <button id="btnReload" class="btn outline small" type="button">Recarregar</button>
+      </div>
+    </section>
+
+    <!-- Form novo -->
+    <section class="card" style="margin-top:14px;">
+      <h2 class="h2" style="margin:0;">Adicionar quarto</h2>
+
+      <form id="formNovo" autocomplete="off" style="margin-top:12px;">
+        <div class="grid-3" style="gap:12px;">
+          <label class="label">
+            Código
+            <input class="input" id="codigo" placeholder="Ex: 01, 02, 101, A1" required />
+            <div class="muted small" style="margin-top:6px;">Único por usuário.</div>
+          </label>
+
+          <label class="label">
+            Nome
+            <input class="input" id="nome" placeholder="Ex: Quarto 01, Suíte 03" required />
+          </label>
+
+          <label class="label">
+            Tipo
+            <input class="input" id="tipo" placeholder="standard / suite / luxo" value="standard" />
+          </label>
+        </div>
+
+        <div class="grid-3" style="gap:12px;margin-top:12px;">
+          <label class="label">
+            Capacidade
+            <input class="input" id="capacidade" type="number" min="1" max="20" value="2" />
+          </label>
+
+          <label class="label">
+            Ordem
+            <input class="input" id="ordem" type="number" value="0" />
+            <div class="muted small" style="margin-top:6px;">Para ordenar na lista.</div>
+          </label>
+
+          <label class="label" style="display:flex;align-items:center;gap:10px;">
+            <input id="ativo" type="checkbox" checked />
+            <span>Ativo</span>
+          </label>
+        </div>
+
+        <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;">
+          <button id="btnAdd" class="btn primary" type="submit">Adicionar</button>
+          <button id="btnClear" class="btn outline" type="button">Limpar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Lista -->
+    <section class="card" style="margin-top:14px;">
+      <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <h2 class="h2" style="margin:0;">Lista</h2>
+        <div class="muted small" id="summary">—</div>
+      </div>
+
+      <!-- Loading -->
+      <div id="stateLoading" style="margin-top:12px;">
+        <p class="muted">Carregando…</p>
+        <div class="skeleton">
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+        </div>
+      </div>
+
+      <!-- Empty -->
+      <div id="stateEmpty" style="display:none;margin-top:12px;">
+        <p class="muted" style="margin:0;">Nenhum quarto cadastrado ainda.</p>
+        <p class="muted small" style="margin-top:6px;">Crie 01–10 ou cadastre manualmente.</p>
+      </div>
+
+      <!-- List -->
+      <div id="stateList" style="display:none;margin-top:12px;">
+        <div id="list"></div>
+      </div>
+    </section>
+
+    <footer class="foot muted small">
+      BRsys Agenda • V2 Quartos • suporte via WhatsApp
+    </footer>
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
+    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
+    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+  </nav>
+
+  <!-- Guard + user email -->
+  <script type="module">
+    import { requireAuth } from "/js/auth.js";
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/quartos.html", renderUserInfo: false });
+    const el = document.getElementById("userEmail");
+    if (el) el.textContent = user?.email || "(sem e-mail)";
+  </script>
+
+  <script type="module" src="/js/nav.js"></script>
+  <script type="module" src="/js/quartos.js"></script>
+</body>
+</html>
