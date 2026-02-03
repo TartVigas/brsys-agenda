@@ -2,11 +2,11 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hoje • Agenda BRsys</title>
 
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Resumo do dia: chegadas, saídas e reservas futuras na Agenda BRsys." />
+  <meta name="description" content="Resumo rápido do dia na Agenda BRsys (chegadas, saídas e ações rápidas)." />
   <link rel="canonical" href="https://agenda.brsys.com.br/hoje.html" />
 
   <link rel="icon" type="image/png" href="/img/favicon.png" />
@@ -19,115 +19,164 @@
 
   <!-- Topbar -->
   <header class="topbar">
-    <div class="topbar-inner">
+    <div class="wrap topbar-inner">
       <div class="brand">
-        <span class="brand-dot" aria-hidden="true"></span>
-        <span class="brand-name">Agenda BRsys</span>
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-sub muted">Hoje • resumo do dia • V1</div>
       </div>
 
-      <div class="topbar-actions">
-        <a class="btn sm ghost" href="/reservas.html">Reservas</a>
-        <a class="btn sm" href="/reserva-nova.html">+ Nova</a>
+      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;">
+        <a class="btn outline small" href="/reservas.html">Reservas</a>
+        <a class="btn primary small" href="/reserva-nova.html">+ Nova</a>
+
+        <div class="userbox" style="margin-left:6px;">
+          <div class="muted small">Logado:</div>
+          <div id="userEmail" class="mono small">carregando…</div>
+          <button id="logout" class="btn outline small">Sair</button>
+        </div>
       </div>
     </div>
   </header>
 
-  <!-- Main -->
-  <main class="app-main">
+  <main class="wrap main">
 
     <!-- Header -->
-    <section class="page-head">
-      <div class="page-head-left">
-        <h1 class="h1">Hoje</h1>
-        <p class="muted">Resumo rápido do dia. <span class="pill" data-kpi="hoje" id="hojeLabel">—</span></p>
+    <section class="card">
+      <div class="row" style="align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h1 class="h1" style="margin:0;">Hoje</h1>
+          <div id="todayLabel" class="muted" style="margin-top:8px;">
+            Resumo rápido do dia.
+          </div>
+        </div>
+
+        <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;">
+          <button id="btnReload" class="btn outline small" type="button">Atualizar</button>
+        </div>
       </div>
 
-      <div class="page-head-right">
-        <div class="kpi">
-          <div class="kpi-label">Futuras</div>
-          <div class="kpi-value" data-kpi="futuras" id="futurasCount">—</div>
-        </div>
+      <div id="msg" class="muted small" style="margin-top:10px;"></div>
+    </section>
+
+    <!-- Loading -->
+    <section id="stateLoading" class="card" style="margin-top:14px;">
+      <h2 class="h2" style="margin:0;">Carregando…</h2>
+      <p class="muted">Buscando chegadas, saídas e futuras.</p>
+      <div class="skeleton">
+        <div class="sk-line"></div>
+        <div class="sk-line"></div>
+        <div class="sk-line"></div>
       </div>
     </section>
 
-    <!-- Msg -->
-    <div id="hojeMsg" class="form-msg" style="display:none;"></div>
+    <!-- Content -->
+    <section id="stateContent" style="display:none;">
 
-    <!-- Grid -->
-    <section class="grid-2">
+      <!-- KPIs -->
+      <section class="card" style="margin-top:14px;">
+        <div class="grid-3">
+          <div class="card" style="margin:0;">
+            <div class="muted small">Futuras</div>
+            <div id="kpiFuture" class="h2" style="margin-top:6px;">0</div>
+            <div class="muted small" style="margin-top:6px;">Reservas com check-in após hoje.</div>
+          </div>
 
-      <!-- Chegadas -->
-      <section class="card">
-        <div class="card-head">
-          <h2 class="h2">Chegadas hoje</h2>
-          <span class="pill">check-in</span>
-        </div>
+          <div class="card" style="margin:0;">
+            <div class="muted small">Chegadas hoje</div>
+            <div id="kpiArrivals" class="h2" style="margin-top:6px;">0</div>
+            <div class="muted small" style="margin-top:6px;">Check-in = hoje.</div>
+          </div>
 
-        <div id="chegadasList" data-list="chegadas">
-          <div class="empty">Carregando chegadas…</div>
+          <div class="card" style="margin:0;">
+            <div class="muted small">Saídas hoje</div>
+            <div id="kpiDepartures" class="h2" style="margin-top:6px;">0</div>
+            <div class="muted small" style="margin-top:6px;">Check-out = hoje.</div>
+          </div>
         </div>
       </section>
 
-      <!-- Saídas -->
-      <section class="card">
-        <div class="card-head">
-          <h2 class="h2">Saídas hoje</h2>
-          <span class="pill">check-out</span>
-        </div>
+      <!-- Chegadas + Saídas -->
+      <section class="grid-2" style="margin-top:14px;">
 
-        <div id="saidasList" data-list="saidas">
-          <div class="empty">Carregando saídas…</div>
+        <!-- Chegadas -->
+        <section class="card" style="margin:0;">
+          <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <h2 class="h2" style="margin:0;">Chegadas hoje</h2>
+            <span class="pill">check-in</span>
+          </div>
+
+          <div id="arrivalsEmpty" class="muted" style="margin-top:10px;display:none;">
+            Nenhuma chegada hoje.
+          </div>
+
+          <div id="arrivalsList" style="margin-top:12px;"></div>
+        </section>
+
+        <!-- Saídas -->
+        <section class="card" style="margin:0;">
+          <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <h2 class="h2" style="margin:0;">Saídas hoje</h2>
+            <span class="pill">check-out</span>
+          </div>
+
+          <div id="departuresEmpty" class="muted" style="margin-top:10px;display:none;">
+            Nenhuma saída hoje.
+          </div>
+
+          <div id="departuresList" style="margin-top:12px;"></div>
+        </section>
+
+      </section>
+
+      <!-- Ação rápida -->
+      <section class="card" style="margin-top:14px;">
+        <h2 class="h2" style="margin:0;">Ação rápida</h2>
+        <p class="muted" style="margin-top:8px;">
+          Se aparecer alguém chegando/saindo hoje, você abre a reserva e chama no WhatsApp em 1 clique.
+        </p>
+
+        <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+          <a class="btn outline" href="/reservas.html">Ver todas as reservas</a>
+          <a class="btn primary" href="/reserva-nova.html">Criar nova reserva</a>
         </div>
       </section>
 
     </section>
 
-    <!-- Dica rápida -->
-    <section class="card subtle">
-      <div class="card-head">
-        <h2 class="h2">Ação rápida</h2>
-        <span class="pill">atalho</span>
-      </div>
-
-      <p class="muted" style="margin:0;">
-        Se aparecer alguém chegando ou saindo hoje, você pode abrir a reserva e chamar no WhatsApp em 1 clique.
+    <!-- Fallback -->
+    <section id="stateError" class="card" style="margin-top:14px;display:none;">
+      <h2 class="h2" style="margin:0;">Não foi possível carregar</h2>
+      <p class="muted" style="margin-top:8px;">
+        Verifique conexão, RLS e se sua sessão está ativa.
       </p>
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+        <button id="btnRetry" class="btn primary" type="button">Tentar novamente</button>
+        <a class="btn outline" href="/entrar.html?next=/hoje.html">Ir para login</a>
+      </div>
     </section>
 
+    <footer class="foot muted small">
+      BRsys Agenda • V1 • suporte via WhatsApp
+    </footer>
   </main>
 
-  <!-- Bottom Nav (mobile-first) -->
-  <nav class="bottomnav" aria-label="Navegação">
-    <a class="bottomnav-item" href="/app.html">
-      <span class="bottomnav-ico" aria-hidden="true">📅</span>
-      <span class="bottomnav-txt">Agenda</span>
-    </a>
-
-    <a class="bottomnav-item" href="/reservas.html">
-      <span class="bottomnav-ico" aria-hidden="true">📚</span>
-      <span class="bottomnav-txt">Reservas</span>
-    </a>
-
-    <a class="bottomnav-item active" href="/hoje.html" aria-current="page">
-      <span class="bottomnav-ico" aria-hidden="true">⚡</span>
-      <span class="bottomnav-txt">Hoje</span>
-    </a>
-
-    <a class="bottomnav-item" href="/conta.html">
-      <span class="bottomnav-ico" aria-hidden="true">👤</span>
-      <span class="bottomnav-txt">Conta</span>
-    </a>
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
+    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
+    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
   </nav>
 
-  <!-- Scripts -->
-  <script type="module" src="/js/auth.js"></script>
+  <!-- Guard + user email -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
-    requireAuth({ redirectTo: "/entrar.html?next=/hoje.html" });
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/hoje.html", renderUserInfo: false });
+    const el = document.getElementById("userEmail");
+    if (el) el.textContent = user?.email || "(sem e-mail)";
   </script>
 
   <script type="module" src="/js/nav.js"></script>
   <script type="module" src="/js/hoje.js"></script>
-
 </body>
 </html>
