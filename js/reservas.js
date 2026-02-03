@@ -105,13 +105,56 @@ function periodLabel(checkin, checkout) {
    State
 ========================= */
 let USER = null;
-let ALL = [];          // tudo do DB
-let FILTERED = [];     // depois de filtro+busca
-let currentFilter = "all"; // all | today | future | past
+let ALL = [];               // tudo do DB
+let FILTERED = [];          // depois de filtro+busca
+let currentFilter = "all";  // all | today | future | past
+
+// quartos (fallback / render)
+let ROOM_MAP = new Map();   // id -> {id,codigo,nome}
+
+/* =========================
+   Quarto label helpers
+========================= */
+function roomLabelFromRow(r) {
+  // Prioridade:
+  // 1) JOIN: r.quarto (obj)
+  // 2) fallback map: ROOM_MAP.get(r.quarto_id)
+  // 3) sem quarto
+  const qJoin = r?.quarto;
+  if (qJoin && (qJoin.codigo || qJoin.nome)) {
+    const cod = qJoin.codigo ? String(qJoin.codigo) : "—";
+    const nome = qJoin.nome ? String(qJoin.nome) : "—";
+    return `${cod} • ${nome}`;
+  }
+
+  if (r?.quarto_id) {
+    const q = ROOM_MAP.get(r.quarto_id);
+    if (q) {
+      const cod = q.codigo ? String(q.codigo) : "—";
+      const nome = q.nome ? String(q.nome) : "—";
+      return `${cod} • ${nome}`;
+    }
+    return "Quarto vinculado";
+  }
+
+  return "(sem quarto)";
+}
 
 /* =========================
    Query DB
 ========================= */
+async function fetchRoomsFallback(user_id) {
+  // usado apenas se JOIN falhar ou para completar map
+  const { data, error } = await supabase
+    .from("agenda_quartos")
+    .select("id,codigo,nome")
+    .eq("user_id", user_id);
+
+  if (error) throw error;
+
+  ROOM_MAP = new Map((data || []).map(q => [q.id, q]));
+}
+
 async function fetchReservas() {
   showState("loading");
   setMsg("");
@@ -122,10 +165,41 @@ async function fetchReservas() {
   const user_id = authData?.user?.id;
   if (!user_id) throw new Error("Sessão expirada. Faça login novamente.");
 
-  // traz o necessário (contrato V1)
+  // 1) tenta JOIN (se existir relacionamento/foreign key reconhecida)
+  // Observação: esse formato funciona quando o PostgREST consegue resolver a relação.
+  // Se não resolver, cai no catch e usa fallback.
+  try {
+    const { data, error } = await supabase
+      .from("agenda_reservas")
+      .select(`
+        id,user_id,nome_hospede,whatsapp,checkin,checkout,observacoes,created_at,updated_at,quarto_id,
+        quarto:agenda_quartos ( id,codigo,nome )
+      `)
+      .eq("user_id", user_id)
+      .order("checkin", { ascending: true })
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    ALL = Array.isArray(data) ? data : [];
+
+    // Prepara map também (não é obrigatório, mas ajuda se algo vier sem join)
+    // Se não existir nenhum quarto_id, nem busca.
+    const hasAnyRoom = ALL.some(r => !!r.quarto_id);
+    if (hasAnyRoom) {
+      await fetchRoomsFallback(user_id);
+    }
+
+    return;
+  } catch (e) {
+    // JOIN falhou (relationship não encontrado etc) -> fallback
+    console.warn("[reservas] JOIN quartos falhou, usando fallback:", e?.message || e);
+  }
+
+  // 2) fallback: busca reservas + busca quartos e monta map
   const { data, error } = await supabase
     .from("agenda_reservas")
-    .select("id,user_id,nome_hospede,whatsapp,checkin,checkout,observacoes,created_at,updated_at")
+    .select("id,user_id,nome_hospede,whatsapp,checkin,checkout,observacoes,created_at,updated_at,quarto_id")
     .eq("user_id", user_id)
     .order("checkin", { ascending: true })
     .order("created_at", { ascending: false });
@@ -133,6 +207,11 @@ async function fetchReservas() {
   if (error) throw error;
 
   ALL = Array.isArray(data) ? data : [];
+
+  const hasAnyRoom = ALL.some(r => !!r.quarto_id);
+  if (hasAnyRoom) {
+    await fetchRoomsFallback(user_id);
+  }
 }
 
 /* =========================
@@ -147,15 +226,9 @@ function applyFilterAndSearch() {
     const ci = r.checkin || "";
     const co = r.checkout || "";
 
-    if (currentFilter === "today") {
-      return ci === t || co === t; // “Hoje” = chega ou sai hoje
-    }
-    if (currentFilter === "future") {
-      return ci > t;
-    }
-    if (currentFilter === "past") {
-      return co < t;
-    }
+    if (currentFilter === "today") return ci === t || co === t;
+    if (currentFilter === "future") return ci > t;
+    if (currentFilter === "past") return co < t;
     return true;
   });
 
@@ -166,7 +239,7 @@ function applyFilterAndSearch() {
     const wa55 = normalizeWhatsappTo55(r.whatsapp || "");
     const waDigits = onlyDigits(wa55);
 
-    // se o cara digitou números, busca no whatsapp
+    // se digitou números, busca no whatsapp
     if (qDigits) return waDigits.includes(qDigits);
 
     // senão busca por nome e também por whatsapp em texto
@@ -194,7 +267,6 @@ function renderList() {
   if (!elList) return;
 
   if (!FILTERED.length) {
-    // Se existe ALL mas filtro/busca zerou, mantemos LIST e mostramos msg
     if (ALL.length) {
       showState("list");
       elList.innerHTML = `
@@ -227,6 +299,8 @@ function renderList() {
     const isFuture = (ci > t);
     const tag = isToday ? "Hoje" : isFuture ? "Futura" : "Passada";
 
+    const quartoLabel = roomLabelFromRow(r);
+
     const waLink = toWaLinkFrom55(wa55, `Olá ${nome}! Aqui é da recepção 🙂`) || "#";
     const waDisabled = waLink === "#";
 
@@ -241,6 +315,10 @@ function renderList() {
 
             <div class="muted small" style="margin-top:6px;">
               Período: <strong>${esc(periodLabel(ci, co))}</strong>
+            </div>
+
+            <div class="muted small" style="margin-top:6px;">
+              Quarto: <span class="mono">${esc(quartoLabel)}</span>
             </div>
 
             <div class="muted small" style="margin-top:6px;">
@@ -267,7 +345,7 @@ function renderList() {
 function setActiveFilterBtn() {
   filterBtns.forEach((b) => {
     const on = b.dataset.filter === currentFilter;
-    b.classList.toggle("primary", on); // se seu CSS usar .btn.primary
+    b.classList.toggle("primary", on);
     b.classList.toggle("outline", !on);
   });
 }
@@ -276,13 +354,11 @@ function setActiveFilterBtn() {
    Events
 ========================= */
 function bindEvents() {
-  // busca
   elQ?.addEventListener("input", () => {
     applyFilterAndSearch();
     renderList();
   });
 
-  // filtros
   filterBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       currentFilter = btn.dataset.filter || "all";
