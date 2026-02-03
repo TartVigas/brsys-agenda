@@ -14,9 +14,9 @@ const elQ = $("#q");
 
 let USER = null;
 let ROOMS = [];
-let RELEVANT = []; // reservas relevantes (ativas/hoje/futuras)
-let VIEW = [];     // cards montados
-let FILTER = "all"; // all | free | occ | today
+let RELEVANT = [];
+let VIEW = [];
+let FILTER = "all";
 
 function show(which) {
   if (elLoading) elLoading.style.display = which === "loading" ? "" : "none";
@@ -24,15 +24,17 @@ function show(which) {
   if (elGridWrap) elGridWrap.style.display = which === "grid" ? "" : "none";
 }
 
-function pad2(n){ return String(n).padStart(2,"0"); }
-function todayISO(){
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+function todayISO() {
   const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
-function formatBR(iso){
+
+function formatBR(iso) {
   if (!iso) return "—";
-  const [y,m,d] = String(iso).split("-");
-  if (!y||!m||!d) return String(iso);
+  const [y, m, d] = String(iso).split("-");
+  if (!y || !m || !d) return String(iso);
   return `${d}/${m}/${y}`;
 }
 
@@ -45,26 +47,32 @@ function escapeHtml(str) {
     .replaceAll("'", "&#039;");
 }
 
-function normalizePhoneBR(raw) {
-  const s = String(raw || "").replace(/\D/g, "");
-  if (!s) return "";
-  if (s.startsWith("55")) return s;
-  if (s.length === 10 || s.length === 11) return `55${s}`;
-  return s;
+function onlyDigits(v = "") {
+  return String(v).replace(/\D/g, "");
 }
 
-function waLink(raw, text="") {
-  const p = normalizePhoneBR(raw);
-  if (!p) return "";
-  return `https://wa.me/${p}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
+function normalizeWhatsappIntl(raw) {
+  const d = onlyDigits(raw);
+  if (!d) return "";
+  if (d.startsWith("55")) return d;
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  return d;
 }
 
-function pill(label, tone="muted") {
+function waLinkFromIntlDigits(intlDigits, text = "") {
+  const w = normalizeWhatsappIntl(intlDigits);
+  if (!w) return "";
+  const qs = text ? `?text=${encodeURIComponent(text)}` : "";
+  return `https://wa.me/${w}${qs}`;
+}
+
+function pill(label, tone = "muted") {
   const color =
-    tone === "ok"   ? "rgba(102,242,218,.95)" :
+    tone === "ok" ? "rgba(102,242,218,.95)" :
     tone === "warn" ? "rgba(255,210,120,.95)" :
-    tone === "bad"  ? "rgba(255,120,120,.95)" :
+    tone === "bad" ? "rgba(255,120,120,.95)" :
     "rgba(255,255,255,.70)";
+
   return `<span class="pill" style="border-color:rgba(255,255,255,.12);color:${color};">${escapeHtml(label)}</span>`;
 }
 
@@ -75,74 +83,11 @@ function roomLabel(r) {
   return codigo || nome || "Quarto";
 }
 
-/**
- * Para cada quarto, a gente calcula:
- * - active: reserva ativa (ocupado agora)
- * - outToday: checkout hoje
- * - inToday: checkin hoje
- * - next: próxima reserva futura (menor checkin > hoje)
- */
-function buildRoomState(room, today, byRoom) {
-  const list = byRoom.get(room.id) || [];
-
-  // ativa: checkin <= hoje && checkout > hoje
-  const active = list.find(r => r.checkin <= today && r.checkout > today) || null;
-
-  // sai hoje: checkout == hoje
-  const outToday = list.find(r => r.checkout === today) || null;
-
-  // entra hoje: checkin == hoje
-  const inToday = list.find(r => r.checkin === today) || null;
-
-  // próxima futura: menor checkin > hoje
-  const futures = list.filter(r => r.checkin > today).sort((a,b) => String(a.checkin).localeCompare(String(b.checkin)));
-  const next = futures[0] || null;
-
-  // status principal (ordem de prioridade)
-  if (active) {
-    return {
-      key: "occ",
-      label: "Ocupado",
-      tone: "warn",
-      hint: `até ${formatBR(active.checkout)}`,
-      ref: active
-    };
-  }
-  if (outToday) {
-    return {
-      key: "today",
-      label: "Sai hoje",
-      tone: "warn",
-      hint: `checkout ${formatBR(outToday.checkout)}`,
-      ref: outToday
-    };
-  }
-  if (inToday) {
-    return {
-      key: "today",
-      label: "Entra hoje",
-      tone: "ok",
-      hint: `check-in ${formatBR(inToday.checkin)}`,
-      ref: inToday
-    };
-  }
-  if (next) {
-    return {
-      key: "free",
-      label: "Reservado",
-      tone: "muted",
-      hint: `próximo ${formatBR(next.checkin)}`,
-      ref: next
-    };
-  }
-
-  return {
-    key: "free",
-    label: "Livre",
-    tone: "ok",
-    hint: "sem previsão",
-    ref: null
-  };
+function roomMeta(r) {
+  const parts = [];
+  if (r.tipo) parts.push(r.tipo);
+  if (r.capacidade != null) parts.push(`Cap: ${r.capacidade}`);
+  return parts.join(" • ") || "—";
 }
 
 function applyUIActiveFilterButtons() {
@@ -158,64 +103,100 @@ function applyUIActiveFilterButtons() {
   });
 }
 
+/**
+ * Estado PMS do quarto (V1)
+ * prioridade:
+ * 1) OCUPADO (checkin <= hoje && checkout > hoje)
+ * 2) SAI HOJE (checkout == hoje)
+ * 3) ENTRA HOJE (checkin == hoje)
+ * 4) RESERVADO FUTURO (próximo checkin > hoje)
+ * 5) LIVRE
+ */
+function buildRoomState(room, today, byRoom) {
+  const list = byRoom.get(room.id) || [];
+
+  const active = list.find(r => r.checkin <= today && r.checkout > today) || null;
+  if (active) {
+    return { key: "occ", label: "Ocupado", tone: "warn", hint: `até ${formatBR(active.checkout)}`, ref: active };
+  }
+
+  const outToday = list.find(r => r.checkout === today) || null;
+  if (outToday) {
+    return { key: "today", label: "Sai hoje", tone: "warn", hint: `checkout ${formatBR(outToday.checkout)}`, ref: outToday };
+  }
+
+  const inToday = list.find(r => r.checkin === today) || null;
+  if (inToday) {
+    return { key: "today", label: "Entra hoje", tone: "ok", hint: `check-in ${formatBR(inToday.checkin)}`, ref: inToday };
+  }
+
+  const next = list
+    .filter(r => r.checkin > today)
+    .sort((a, b) => String(a.checkin).localeCompare(String(b.checkin)))[0] || null;
+
+  if (next) {
+    return { key: "free", label: "Reservado", tone: "muted", hint: `próximo ${formatBR(next.checkin)}`, ref: next };
+  }
+
+  return { key: "free", label: "Livre", tone: "ok", hint: "sem previsão", ref: null };
+}
+
 function buildCard(room, st) {
   const title = roomLabel(room);
-  const metaParts = [];
-  if (room.tipo) metaParts.push(room.tipo);
-  if (room.capacidade != null) metaParts.push(`Cap: ${room.capacidade}`);
-  const meta = metaParts.join(" • ") || "—";
+  const meta = roomMeta(room);
 
   const ref = st.ref;
   const guest = ref?.nome_hospede ? String(ref.nome_hospede).trim() : "";
   const phone = ref?.whatsapp || "";
-  const wpp = phone ? waLink(phone, `Olá ${guest || "tudo bem"}! Aqui é da recepção 🙂`) : "";
+  const wpp = phone ? waLinkFromIntlDigits(phone, `Olá ${guest || "tudo bem"}! Aqui é da recepção 🙂`) : "";
 
-  // ações:
   const aOpen = ref?.id ? `/reserva.html?id=${encodeURIComponent(ref.id)}` : "";
   const aNew = `/reserva-nova.html?quarto_id=${encodeURIComponent(room.id)}`;
   const aWalk = `/reserva-nova.html?quarto_id=${encodeURIComponent(room.id)}&walkin=1`;
 
-  const canWalkIn = (st.label === "Livre" || st.label === "Reservado"); // V1: walk-in permitido até em "reservado" (se quiser bloquear, eu mudo)
+  // walk-in permitido quando livre ou reservado (você pode bloquear reservado se quiser)
+  const canWalkIn = (st.label === "Livre" || st.label === "Reservado");
   const walkText = st.label === "Reservado" ? "Walk-in (forçar)" : "Walk-in";
 
-  const html = `
-    <div class="mini-card" style="display:flex;flex-direction:column;gap:8px;">
-      <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;">
-        <div style="min-width:0;">
-          <div style="font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-            ${escapeHtml(title)}
+  return {
+    room,
+    st,
+    html: `
+      <div class="mini-card" style="display:flex;flex-direction:column;gap:8px;">
+        <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;">
+          <div style="min-width:0;">
+            <div style="font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              ${escapeHtml(title)}
+            </div>
+            <div class="muted small" style="margin-top:6px;">${escapeHtml(meta)}</div>
           </div>
-          <div class="muted small" style="margin-top:6px;">${escapeHtml(meta)}</div>
+          ${pill(st.label, st.tone)}
         </div>
-        ${pill(st.label, st.tone)}
-      </div>
 
-      <div class="muted small">
-        <span class="mono">${escapeHtml(st.hint)}</span>
-        ${guest ? ` • <strong>${escapeHtml(guest)}</strong>` : ""}
-      </div>
+        <div class="muted small">
+          <span class="mono">${escapeHtml(st.hint)}</span>
+          ${guest ? ` • <strong>${escapeHtml(guest)}</strong>` : ""}
+        </div>
 
-      <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px;">
-        ${aOpen ? `<a class="btn outline small" href="${aOpen}">Abrir</a>` : ""}
-        <a class="btn outline small" href="${aNew}">Nova</a>
-        ${canWalkIn ? `<a class="btn primary small" href="${aWalk}">${escapeHtml(walkText)}</a>` : ""}
-        ${wpp ? `<a class="btn outline small" href="${wpp}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px;">
+          ${aOpen ? `<a class="btn outline small" href="${aOpen}">Abrir</a>` : ""}
+          <a class="btn outline small" href="${aNew}">Nova</a>
+          ${canWalkIn ? `<a class="btn primary small" href="${aWalk}">${escapeHtml(walkText)}</a>` : ""}
+          ${wpp ? `<a class="btn outline small" href="${wpp}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}
+        </div>
       </div>
-    </div>
-  `;
-
-  return { room, st, html };
+    `
+  };
 }
 
 function filterView(list) {
   const q = (elQ?.value || "").trim().toLowerCase();
-
   let out = list;
 
   if (FILTER !== "all") {
     if (FILTER === "occ") out = out.filter(x => x.st.key === "occ");
     if (FILTER === "free") out = out.filter(x => x.st.key === "free");
-    if (FILTER === "today") out = out.filter(x => x.st.key === "today" || x.st.label === "Sai hoje" || x.st.label === "Entra hoje");
+    if (FILTER === "today") out = out.filter(x => x.st.key === "today" || x.st.key === "occ");
   }
 
   if (q) {
@@ -225,16 +206,15 @@ function filterView(list) {
     });
   }
 
-  // ordenação: ocupados -> hoje -> livres
-  const weight = (x) => {
+  // ordenação: ocupados -> hoje -> reservado -> livre
+  const w = (x) => {
     if (x.st.key === "occ") return 0;
     if (x.st.key === "today") return 1;
     if (x.st.label === "Reservado") return 2;
     return 3;
   };
-  out = out.slice().sort((a,b) => weight(a) - weight(b));
 
-  return out;
+  return out.slice().sort((a, b) => w(a) - w(b));
 }
 
 function render() {
@@ -242,12 +222,13 @@ function render() {
 
   const out = filterView(VIEW);
 
+  const t = todayISO();
+  const free = VIEW.filter(x => x.st.key === "free").length;
+  const occ = VIEW.filter(x => x.st.key === "occ").length;
+  const todayCount = VIEW.filter(x => x.st.key === "today").length;
+
   if (elSummary) {
-    const t = todayISO();
-    const free = VIEW.filter(x => x.st.key === "free").length;
-    const occ = VIEW.filter(x => x.st.key === "occ").length;
-    const today = VIEW.filter(x => x.st.key === "today").length;
-    elSummary.textContent = `${VIEW.length} quartos • ${occ} ocupados • ${today} hoje • ${free} livres • ${formatBR(t)}`;
+    elSummary.textContent = `${VIEW.length} quartos • ${occ} ocupados • ${todayCount} hoje • ${free} livres • ${formatBR(t)}`;
   }
 
   if (!VIEW.length) {
@@ -290,7 +271,7 @@ async function load() {
     .order("codigo", { ascending: true });
 
   if (rErr) {
-    console.error(rErr);
+    console.error("[mapa] rooms error:", rErr);
     show("empty");
     if (elSummary) elSummary.textContent = "Erro ao carregar quartos";
     return;
@@ -303,27 +284,24 @@ async function load() {
     return;
   }
 
-  // 2) reservas relevantes (ativas/hoje + próximas)
-  // V1: puxa uma janela de futuro (ex.: 60 dias) para dar “previsão” sem pesar
+  // 2) reservas relevantes (ativas/hoje + janela futura)
   const futureEnd = (() => {
     const d = new Date();
     d.setDate(d.getDate() + 60);
-    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   })();
 
   const { data: resv, error: eResv } = await supabase
     .from("agenda_reservas")
-    .select("id, user_id, quarto_id, nome_hospede, whatsapp, checkin, checkout, status")
+    .select("id, quarto_id, nome_hospede, whatsapp, checkin, checkout")
     .eq("user_id", USER.id)
     .not("quarto_id", "is", null)
-    .gte("checkout", today)          // pega ativas e sai hoje
-    .lte("checkin", futureEnd)       // janela futura
+    .gte("checkout", today)
+    .lte("checkin", futureEnd)
     .order("checkin", { ascending: true })
     .limit(2000);
 
-  if (eResv) {
-    console.warn("[mapa] reservas warning:", eResv);
-  }
+  if (eResv) console.warn("[mapa] reservas warning:", eResv);
 
   RELEVANT = Array.isArray(resv) ? resv : [];
 
