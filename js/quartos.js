@@ -7,25 +7,30 @@ import { requireAuth } from "./auth.js";
 
   const elMsg = $("#msg");
   const elSummary = $("#summary");
+
+  const elQ = $("#q");
+  const elFilterAtivo = $("#filterAtivo");
+
+  const form = $("#formQuarto");
+  const roomId = $("#roomId");
+  const codigo = $("#codigo");
+  const nome = $("#nome");
+  const tipo = $("#tipo");
+  const capacidade = $("#capacidade");
+  const ordem = $("#ordem");
+  const ativo = $("#ativo");
+
+  const btnNovo = $("#btnNovo");
+  const btnSalvar = $("#btnSalvar");
+  const btnLimpar = $("#btnLimpar");
+
   const stateLoading = $("#stateLoading");
   const stateEmpty = $("#stateEmpty");
-  const stateList = $("#stateList");
-  const listEl = $("#list");
-
-  const formNovo = $("#formNovo");
-  const inCodigo = $("#codigo");
-  const inNome = $("#nome");
-  const inTipo = $("#tipo");
-  const inCap = $("#capacidade");
-  const inOrdem = $("#ordem");
-  const inAtivo = $("#ativo");
-
-  const btnSeed = $("#btnSeed");
-  const btnReload = $("#btnReload");
-  const btnClear = $("#btnClear");
+  const list = $("#list");
 
   let USER = null;
-  let ROOMS = [];
+  let ROWS = [];
+  let saving = false;
 
   function setMsg(text = "", type = "info") {
     if (!elMsg) return;
@@ -36,393 +41,280 @@ import { requireAuth } from "./auth.js";
                          "rgba(255,255,255,.70)";
   }
 
-  function show(which) {
+  function showStates(which) {
     if (stateLoading) stateLoading.style.display = which === "loading" ? "" : "none";
     if (stateEmpty) stateEmpty.style.display = which === "empty" ? "" : "none";
-    if (stateList) stateList.style.display = which === "list" ? "" : "none";
+    if (list) list.style.display = which === "list" ? "" : "none";
   }
 
-  function normalizeText(v) {
-    return String(v || "").trim().replace(/\s+/g, " ");
+  function norm(s = "") {
+    return String(s || "").toLowerCase().trim();
   }
 
-  function normalizeCode(v) {
-    // mantém letras/números, remove espaços, deixa em maiúsculo
-    return normalizeText(v).replace(/\s+/g, "").toUpperCase();
+  function cleanCodigo(s = "") {
+    return String(s || "")
+      .trim()
+      .replace(/\s+/g, "")
+      .toUpperCase()
+      .slice(0, 10);
   }
 
-  function toInt(v, fallback = 0) {
-    const n = Number(String(v ?? "").trim());
-    return Number.isFinite(n) ? n : fallback;
+  function validate(model) {
+    if (!model.codigo || model.codigo.length < 1) return "Informe o código.";
+    if (!model.nome || model.nome.length < 2) return "Informe o nome do quarto.";
+    return null;
   }
 
-  function escapeHtml(str = "") {
-    return String(str)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  function readModel() {
+    return {
+      id: roomId?.value || null,
+      codigo: cleanCodigo(codigo?.value || ""),
+      nome: (nome?.value || "").trim(),
+      tipo: (tipo?.value || "standard").trim() || "standard",
+      capacidade: Number(capacidade?.value || 2),
+      ordem: Number(ordem?.value || 0),
+      ativo: !!ativo?.checked,
+    };
   }
 
-  function roomCard(r) {
-    const ativo = !!r.ativo;
+  function fillForm(r) {
+    roomId.value = r?.id || "";
+    codigo.value = r?.codigo || "";
+    nome.value = r?.nome || "";
+    tipo.value = r?.tipo || "standard";
+    capacidade.value = String(r?.capacidade ?? 2);
+    ordem.value = String(r?.ordem ?? 0);
+    ativo.checked = r?.ativo !== false;
+  }
+
+  function clearForm() {
+    roomId.value = "";
+    codigo.value = "";
+    nome.value = "";
+    tipo.value = "standard";
+    capacidade.value = "2";
+    ordem.value = "0";
+    ativo.checked = true;
+    codigo.focus();
+    setMsg("");
+  }
+
+  function renderRow(r) {
+    const badge = r.ativo
+      ? `<span class="pill" style="border:1px solid rgba(102,242,218,.35);color:rgba(102,242,218,.95);">Ativo</span>`
+      : `<span class="pill" style="border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.65);">Inativo</span>`;
 
     return `
-      <div class="list-item" data-id="${escapeHtml(r.id)}">
-        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;">
-          <div style="min-width:0;flex:1;">
-            <div style="font-weight:900;">
-              ${escapeHtml(r.codigo)} • ${escapeHtml(r.nome)}
-              ${ativo ? "" : `<span class="pill" style="margin-left:8px;">inativo</span>`}
+      <div class="list-item" data-id="${r.id}">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+          <div style="min-width:0;">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <div style="font-weight:900;">${r.codigo} • ${r.nome}</div>
+              ${badge}
             </div>
-            <div class="muted small" style="margin-top:4px;">
-              Tipo: <span class="mono">${escapeHtml(r.tipo || "standard")}</span>
-              • Cap.: <span class="mono">${escapeHtml(String(r.capacidade ?? 2))}</span>
-              • Ordem: <span class="mono">${escapeHtml(String(r.ordem ?? 0))}</span>
+            <div class="muted small" style="margin-top:6px;">
+              Tipo: <span class="mono">${r.tipo || "standard"}</span>
+              • Cap: <strong>${r.capacidade ?? 2}</strong>
+              • Ordem: <strong>${r.ordem ?? 0}</strong>
             </div>
           </div>
 
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-            <button class="btn outline small" data-action="edit">Editar</button>
-            <button class="btn outline small" data-action="toggle">${ativo ? "Desativar" : "Ativar"}</button>
-            <button class="btn outline small" data-action="delete">Excluir</button>
-          </div>
-        </div>
-
-        <!-- editor inline -->
-        <div class="card" data-editor style="display:none;margin-top:12px;">
-          <div class="grid-3" style="gap:12px;">
-            <label class="label">
-              Código
-              <input class="input" data-f="codigo" value="${escapeHtml(r.codigo || "")}" />
-            </label>
-            <label class="label">
-              Nome
-              <input class="input" data-f="nome" value="${escapeHtml(r.nome || "")}" />
-            </label>
-            <label class="label">
-              Tipo
-              <input class="input" data-f="tipo" value="${escapeHtml(r.tipo || "standard")}" />
-            </label>
-          </div>
-
-          <div class="grid-3" style="gap:12px;margin-top:12px;">
-            <label class="label">
-              Capacidade
-              <input class="input" data-f="capacidade" type="number" min="1" max="20" value="${escapeHtml(String(r.capacidade ?? 2))}" />
-            </label>
-            <label class="label">
-              Ordem
-              <input class="input" data-f="ordem" type="number" value="${escapeHtml(String(r.ordem ?? 0))}" />
-            </label>
-            <label class="label" style="display:flex;align-items:center;gap:10px;">
-              <input data-f="ativo" type="checkbox" ${ativo ? "checked" : ""} />
-              <span>Ativo</span>
-            </label>
-          </div>
-
-          <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;">
-            <button class="btn primary" data-action="save">Salvar</button>
-            <button class="btn outline" data-action="cancel">Cancelar</button>
+            <button class="btn outline small" data-act="edit">Editar</button>
+            <button class="btn outline small" data-act="toggle">${r.ativo ? "Desativar" : "Ativar"}</button>
           </div>
         </div>
       </div>
     `;
   }
 
-  function render() {
-    if (elSummary) elSummary.textContent = `Total: ${ROOMS.length}`;
+  function applyFilters() {
+    const q = norm(elQ?.value || "");
+    const f = (elFilterAtivo?.value || "ativos");
 
-    if (!ROOMS.length) {
-      show("empty");
-      if (listEl) listEl.innerHTML = "";
+    let rows = [...ROWS];
+
+    if (f === "ativos") rows = rows.filter(r => r.ativo);
+    if (f === "inativos") rows = rows.filter(r => !r.ativo);
+
+    if (q) {
+      rows = rows.filter(r => {
+        const hay = `${r.codigo} ${r.nome} ${r.tipo}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    // ordena: ordem asc, depois codigo asc
+    rows.sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0) || String(a.codigo).localeCompare(String(b.codigo)));
+
+    if (!rows.length) {
+      showStates("empty");
+      if (elSummary) elSummary.textContent = `0 quartos (${f})`;
       return;
     }
 
-    // ordena por ativo desc, ordem asc, codigo asc
-    const ordered = [...ROOMS].sort((a, b) => {
-      const av = a.ativo ? 0 : 1;
-      const bv = b.ativo ? 0 : 1;
-      if (av !== bv) return av - bv;
-
-      const ao = Number(a.ordem ?? 0);
-      const bo = Number(b.ordem ?? 0);
-      if (ao !== bo) return ao - bo;
-
-      return String(a.codigo || "").localeCompare(String(b.codigo || ""), "pt-BR", { numeric: true });
-    });
-
-    if (listEl) listEl.innerHTML = ordered.map(roomCard).join("");
-    show("list");
+    showStates("list");
+    if (list) list.innerHTML = rows.map(renderRow).join("");
+    if (elSummary) elSummary.textContent = `${rows.length} quartos (${f})`;
   }
 
   async function loadRooms() {
+    showStates("loading");
     setMsg("");
-    show("loading");
 
     const { data, error } = await supabase
       .from("agenda_quartos")
-      .select("id, codigo, nome, tipo, capacidade, ativo, ordem, created_at, updated_at")
-      .eq("user_id", USER.id);
+      .select("id, codigo, nome, tipo, capacidade, ordem, ativo, created_at, updated_at")
+      .eq("user_id", USER.id)
+      .order("ordem", { ascending: true })
+      .order("codigo", { ascending: true });
 
     if (error) {
       console.error("[quartos] load error:", error);
-      setMsg("Erro ao carregar quartos. Verifique conexão/RLS.", "error");
-      show("empty");
+      setMsg("Erro ao carregar quartos. Veja o Console (F12).", "error");
+      showStates("empty");
       return;
     }
 
-    ROOMS = data || [];
-    render();
+    ROWS = (data || []).map(r => ({
+      ...r,
+      ativo: r.ativo !== false,
+    }));
+
+    applyFilters();
   }
 
-  function clearForm() {
-    if (inCodigo) inCodigo.value = "";
-    if (inNome) inNome.value = "";
-    if (inTipo) inTipo.value = "standard";
-    if (inCap) inCap.value = "2";
-    if (inOrdem) inOrdem.value = "0";
-    if (inAtivo) inAtivo.checked = true;
-  }
+  async function upsertRoom(model) {
+    if (saving) return;
+    saving = true;
 
-  function validateNew(payload) {
-    if (!payload.codigo || payload.codigo.length < 1) return "Informe o código.";
-    if (!payload.nome || payload.nome.length < 2) return "Informe o nome do quarto.";
-    if (payload.capacidade < 1 || payload.capacidade > 20) return "Capacidade inválida (1–20).";
-    return null;
-  }
+    const err = validate(model);
+    if (err) {
+      setMsg(err, "error");
+      saving = false;
+      return;
+    }
 
-  async function addRoom(ev) {
-    ev.preventDefault();
-    setMsg("");
+    btnSalvar.disabled = true;
+    setMsg("Salvando…", "info");
 
     const payload = {
       user_id: USER.id,
-      codigo: normalizeCode(inCodigo?.value),
-      nome: normalizeText(inNome?.value),
-      tipo: normalizeText(inTipo?.value) || "standard",
-      capacidade: toInt(inCap?.value, 2),
-      ordem: toInt(inOrdem?.value, 0),
-      ativo: !!inAtivo?.checked,
+      codigo: model.codigo,
+      nome: model.nome,
+      tipo: model.tipo || "standard",
+      capacidade: model.capacidade ?? 2,
+      ordem: model.ordem ?? 0,
+      ativo: model.ativo !== false,
     };
 
-    const err = validateNew(payload);
-    if (err) return setMsg(err, "error");
+    let q = supabase.from("agenda_quartos");
 
-    // insert
-    const { data, error } = await supabase
-      .from("agenda_quartos")
-      .insert(payload)
-      .select("id, codigo, nome, tipo, capacidade, ativo, ordem, created_at, updated_at")
-      .single();
+    const { data, error } = model.id
+      ? await q.update(payload).eq("id", model.id).eq("user_id", USER.id).select("*").single()
+      : await q.insert(payload).select("*").single();
+
+    saving = false;
+    btnSalvar.disabled = false;
 
     if (error) {
-      console.error("[quartos] insert error:", error);
-      // erro comum: unique (user_id,codigo)
-      const msg = (String(error.message || "").includes("agenda_quartos_user_codigo_uk"))
-        ? "Já existe um quarto com esse código."
-        : (error.message || "Erro ao salvar. Tente novamente.");
-      return setMsg(msg, "error");
+      console.error("[quartos] save error:", error);
+
+      // conflito de unique (user_id,codigo)
+      if (String(error.message || "").toLowerCase().includes("unique")) {
+        setMsg("Já existe um quarto com esse código. Troque o código.", "error");
+        return;
+      }
+
+      setMsg("Erro ao salvar. Verifique RLS/Conexão e tente de novo.", "error");
+      return;
     }
 
-    ROOMS.push(data);
-    render();
-    clearForm();
-    setMsg("Quarto adicionado ✅", "ok");
+    setMsg("Salvo ✅", "ok");
+
+    // atualiza cache local
+    const idx = ROWS.findIndex(x => x.id === data.id);
+    if (idx >= 0) ROWS[idx] = data;
+    else ROWS.unshift(data);
+
+    applyFilters();
+    fillForm(data);
   }
 
-  function getRoom(id) {
-    return ROOMS.find(r => r.id === id);
-  }
+  async function toggleActive(id, next) {
+    setMsg("Atualizando…", "info");
 
-  async function updateRoom(id, patch) {
     const { data, error } = await supabase
       .from("agenda_quartos")
-      .update(patch)
+      .update({ ativo: !!next })
       .eq("id", id)
       .eq("user_id", USER.id)
-      .select("id, codigo, nome, tipo, capacidade, ativo, ordem, created_at, updated_at")
+      .select("*")
       .single();
 
     if (error) {
-      console.error("[quartos] update error:", error);
-      const msg = (String(error.message || "").includes("agenda_quartos_user_codigo_uk"))
-        ? "Esse código já existe em outro quarto."
-        : (error.message || "Erro ao atualizar.");
-      setMsg(msg, "error");
-      return null;
+      console.error("[quartos] toggle error:", error);
+      setMsg("Erro ao atualizar status. Veja o Console (F12).", "error");
+      return;
     }
 
-    // atualiza no array
-    ROOMS = ROOMS.map(r => (r.id === id ? data : r));
-    render();
-    setMsg("Atualizado ✅", "ok");
-    return data;
+    const idx = ROWS.findIndex(x => x.id === data.id);
+    if (idx >= 0) ROWS[idx] = data;
+
+    setMsg(next ? "Quarto ativado ✅" : "Quarto desativado ✅", "ok");
+    applyFilters();
   }
 
-  async function deleteRoom(id) {
-    const r = getRoom(id);
-    const name = r?.nome ? `"${r.nome}"` : "este quarto";
-    const ok = window.confirm(`Excluir ${name}? Essa ação não pode ser desfeita.`);
-    if (!ok) return;
-
-    setMsg("Excluindo…", "info");
-
-    const { error } = await supabase
-      .from("agenda_quartos")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", USER.id);
-
-    if (error) {
-      console.error("[quartos] delete error:", error);
-      return setMsg(error.message || "Erro ao excluir.", "error");
-    }
-
-    ROOMS = ROOMS.filter(x => x.id !== id);
-    render();
-    setMsg("Excluído ✅", "ok");
-  }
-
-  async function toggleRoom(id) {
-    const r = getRoom(id);
-    if (!r) return;
-
-    setMsg("Atualizando…", "info");
-    await updateRoom(id, { ativo: !r.ativo });
-  }
-
-  function toggleEditor(cardEl, open) {
-    const editor = cardEl.querySelector('[data-editor]');
-    if (!editor) return;
-    editor.style.display = open ? "" : "none";
-  }
-
-  async function saveEditor(cardEl) {
-    const id = cardEl.getAttribute("data-id");
-    const r = getRoom(id);
-    if (!r) return;
-
-    const getVal = (f) => cardEl.querySelector(`[data-f="${f}"]`);
-    const vCodigo = normalizeCode(getVal("codigo")?.value);
-    const vNome = normalizeText(getVal("nome")?.value);
-    const vTipo = normalizeText(getVal("tipo")?.value) || "standard";
-    const vCap = toInt(getVal("capacidade")?.value, 2);
-    const vOrdem = toInt(getVal("ordem")?.value, 0);
-    const vAtivo = !!getVal("ativo")?.checked;
-
-    const patch = {
-      codigo: vCodigo,
-      nome: vNome,
-      tipo: vTipo,
-      capacidade: vCap,
-      ordem: vOrdem,
-      ativo: vAtivo,
-    };
-
-    const err = validateNew({ ...patch, user_id: USER.id });
-    if (err) return setMsg(err, "error");
-
-    await updateRoom(id, patch);
-    toggleEditor(cardEl, false);
-  }
-
-  async function seedDefaults() {
-    const ok = window.confirm("Criar quartos padrão 01–10? (não duplica códigos existentes)");
-    if (!ok) return;
-
-    setMsg("Criando quartos padrão…", "info");
-
-    // cria 01..10
-    const items = Array.from({ length: 10 }).map((_, i) => {
-      const n = String(i + 1).padStart(2, "0");
-      return {
-        user_id: USER.id,
-        codigo: n,
-        nome: `Quarto ${n}`,
-        tipo: "standard",
-        capacidade: 2,
-        ativo: true,
-        ordem: i + 1,
-      };
-    });
-
-    // insert em lote (constraint unique segura duplicados, mas o Supabase retorna erro se bater unique)
-    // então fazemos 1 por 1 de forma segura (simples e robusto).
-    let created = 0;
-    for (const it of items) {
-      const { data, error } = await supabase
-        .from("agenda_quartos")
-        .insert(it)
-        .select("id, codigo, nome, tipo, capacidade, ativo, ordem, created_at, updated_at")
-        .single();
-
-      if (!error && data) {
-        ROOMS.push(data);
-        created++;
-      }
-    }
-
-    render();
-    setMsg(`Padrão criado ✅ (${created} novos)`, "ok");
-  }
-
-  // Delegação de eventos na lista
   function bindListActions() {
-    if (!listEl) return;
-
-    listEl.addEventListener("click", async (ev) => {
-      const btn = ev.target.closest("button, a");
+    list?.addEventListener("click", async (e) => {
+      const btn = e.target?.closest?.("button[data-act]");
       if (!btn) return;
 
-      const card = ev.target.closest(".list-item[data-id]");
-      if (!card) return;
+      const item = e.target.closest(".list-item");
+      const id = item?.getAttribute("data-id");
+      if (!id) return;
 
-      const id = card.getAttribute("data-id");
-      const action = btn.getAttribute("data-action");
-      if (!action) return;
+      const r = ROWS.find(x => x.id === id);
+      if (!r) return;
 
-      if (action === "edit") {
-        toggleEditor(card, true);
+      const act = btn.getAttribute("data-act");
+
+      if (act === "edit") {
+        fillForm(r);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setMsg("Editando quarto. Faça ajustes e clique Salvar.", "info");
         return;
       }
 
-      if (action === "cancel") {
-        toggleEditor(card, false);
-        setMsg("");
-        return;
-      }
-
-      if (action === "save") {
-        await saveEditor(card);
-        return;
-      }
-
-      if (action === "toggle") {
-        await toggleRoom(id);
-        return;
-      }
-
-      if (action === "delete") {
-        await deleteRoom(id);
+      if (act === "toggle") {
+        const next = !(r.ativo !== false);
+        await toggleActive(id, next);
         return;
       }
     });
   }
 
-  // Boot
   (async function boot() {
     USER = await requireAuth({ redirectTo: "/entrar.html?next=/quartos.html", renderUserInfo: false });
     if (!USER) return;
 
+    btnNovo?.addEventListener("click", () => {
+      clearForm();
+      setMsg("Novo quarto.", "info");
+    });
+
+    btnLimpar?.addEventListener("click", clearForm);
+
+    form?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await upsertRoom(readModel());
+    });
+
+    elQ?.addEventListener("input", applyFilters);
+    elFilterAtivo?.addEventListener("change", applyFilters);
+
     bindListActions();
-
-    formNovo?.addEventListener("submit", addRoom);
-    btnClear?.addEventListener("click", clearForm);
-    btnReload?.addEventListener("click", loadRooms);
-    btnSeed?.addEventListener("click", seedDefaults);
-
+    clearForm();
     await loadRooms();
   })();
 })();
