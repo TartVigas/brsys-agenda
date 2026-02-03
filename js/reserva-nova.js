@@ -1,24 +1,29 @@
 /* /js/reserva-nova.js
    V1 — Insert em agenda_reservas com validação + conversão (datas/WhatsApp)
-   Contrato:
-   - Inputs: #nome_hospede, #whatsapp, #checkin, #checkout, #observacoes
-   - Form:   #reservaNovaForm  (ou primeiro <form> da página)
-   - Feedback: #formMsg (opcional)
-   - Botão submit: button[type="submit"] (opcional)
-   - Redirect: /reserva.html?id=UUID (preferido) ou /reservas.html
+
+   ESTE ARQUIVO ESTÁ ALINHADO COM O SEU reserva-nova.html:
+   - Form:        #formReserva
+   - Inputs:      #nome, #whatsapp, #checkin, #checkout, #obs
+   - Feedback:    #msg
+   - Botões:      #btnSalvar (submit), #btnLimpar (type=button)
+
+   Contrato Supabase (agenda_reservas):
+   - id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at
+   - checkin/checkout salvos como YYYY-MM-DD
+   - whatsapp salvo como dígitos (ex: 5511999998888)
 */
 
 import { supabase } from "./supabase.js";
 
 (function () {
-  // ---------- Helpers ----------
   const $ = (sel, root = document) => root.querySelector(sel);
 
+  // ---------- UI helpers ----------
   function setMsg(el, text, type = "info") {
     if (!el) return;
     el.textContent = text || "";
     el.style.display = text ? "block" : "none";
-    el.dataset.type = type; // opcional p/ CSS: [data-type="error"]
+    el.dataset.type = type; // opcional p/ CSS
   }
 
   function lockSubmit(form, locked) {
@@ -29,54 +34,104 @@ import { supabase } from "./supabase.js";
     btn.dataset.loading = locked ? "1" : "0";
   }
 
-  // YYYY-MM-DD (input type="date" já entrega nesse formato)
+  function normalizeText(v) {
+    return String(v || "").trim().replace(/\s+/g, " ");
+  }
+
+  // ---------- Data (BR) -> ISO ----------
+  function maskDateInput(el) {
+    if (!el) return;
+    el.addEventListener("input", () => {
+      // aceita só números, aplica DD/MM/AAAA
+      let v = el.value.replace(/\D/g, "").slice(0, 8);
+
+      if (v.length >= 5) el.value = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
+      else if (v.length >= 3) el.value = `${v.slice(0, 2)}/${v.slice(2)}`;
+      else el.value = v;
+    });
+
+    // melhora UX: se colar "01/02/2026" ou "01022026", mantém ok
+    el.addEventListener("paste", () => {
+      setTimeout(() => {
+        let v = el.value.replace(/\D/g, "").slice(0, 8);
+        if (v.length >= 5) el.value = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
+        else if (v.length >= 3) el.value = `${v.slice(0, 2)}/${v.slice(2)}`;
+        else el.value = v;
+      }, 0);
+    });
+  }
+
+  function brDateToISO(v) {
+    const s = normalizeText(v);
+    const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return "";
+    const dd = m[1], mm = m[2], yyyy = m[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   function isISODate(v) {
     return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
   }
 
   function compareISO(a, b) {
-    // retorna: -1, 0, 1 (lexicográfico funciona pra YYYY-MM-DD)
     if (a === b) return 0;
     return a < b ? -1 : 1;
   }
 
-  function normalizeText(v) {
-    return String(v || "").trim().replace(/\s+/g, " ");
+  // valida datas reais (ex: 31/02 deve falhar)
+  function isValidISOCalendarDate(iso) {
+    if (!isISODate(iso)) return false;
+    const [y, m, d] = iso.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return (
+      dt.getFullYear() === y &&
+      dt.getMonth() === m - 1 &&
+      dt.getDate() === d
+    );
   }
 
-  // WhatsApp -> guarda como dígitos internacionais sem "+"
-  // Ex:
-  //  (13) 99740-8157 -> 5513997408157
-  //  13997408157      -> 5513997408157
-  //  +55 13 99740...  -> 5513997408157
-  function normalizeWhatsapp(raw) {
+  // ---------- WhatsApp ----------
+  function maskWhatsappInput(el) {
+    if (!el) return;
+    el.addEventListener("input", () => {
+      // aceita até 11 dígitos (DDD + número BR)
+      let v = el.value.replace(/\D/g, "").slice(0, 11);
+
+      if (v.length >= 7) el.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
+      else if (v.length >= 3) el.value = `(${v.slice(0, 2)}) ${v.slice(2)}`;
+      else el.value = v;
+    });
+
+    el.addEventListener("paste", () => {
+      setTimeout(() => {
+        let v = el.value.replace(/\D/g, "").slice(0, 11);
+        if (v.length >= 7) el.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
+        else if (v.length >= 3) el.value = `(${v.slice(0, 2)}) ${v.slice(2)}`;
+        else el.value = v;
+      }, 0);
+    });
+  }
+
+  // retorna 5511.... (sem +)
+  function normalizeWhatsappTo55(raw) {
     const digits = String(raw || "").replace(/\D/g, "");
     if (!digits) return "";
 
-    // Se já veio com 55 (Brasil), mantém
-    if (digits.startsWith("55")) {
-      return digits;
-    }
+    // se já vier com 55
+    if (digits.startsWith("55")) return digits;
 
-    // Se veio só com DDD+numero (10 ou 11 dígitos), adiciona 55
-    // Ex: 13997408157 (11) ou 1333334444 (10)
-    if (digits.length === 10 || digits.length === 11) {
-      return "55" + digits;
-    }
+    // se vier com DDD + número (10 ou 11 dígitos)
+    if (digits.length === 10 || digits.length === 11) return "55" + digits;
 
-    // Se veio só número sem DDD (8-9 dígitos) — inválido pra nosso contrato
-    return digits; // devolve mesmo assim; validação abaixo pega
+    return digits; // cai na validação
   }
 
-  function validateWhatsappIntlDigits(w) {
-    // Esperado: 55 + DDD(2) + número(8 ou 9) => 12 ou 13 dígitos total
-    // 55 + 2 + 8 = 12
-    // 55 + 2 + 9 = 13
+  function validateWhatsapp55(w) {
+    // Esperado: 55 + DDD(2) + número(8 ou 9) => 12 ou 13 dígitos
     if (!/^\d+$/.test(w)) return false;
     if (!w.startsWith("55")) return false;
     if (!(w.length === 12 || w.length === 13)) return false;
 
-    // DDD simples (01..99) — sem travar demais
     const ddd = w.slice(2, 4);
     if (ddd === "00") return false;
 
@@ -84,30 +139,47 @@ import { supabase } from "./supabase.js";
   }
 
   // ---------- Main ----------
-  const form =
-    $("#reservaNovaForm") ||
-    document.querySelector("form");
-
+  const form = $("#formReserva") || document.querySelector("form");
   if (!form) return;
 
-  const elNome = $("#nome_hospede", form);
+  // IDs reais do seu HTML
+  const elNome = $("#nome", form);
   const elWhats = $("#whatsapp", form);
   const elCheckin = $("#checkin", form);
   const elCheckout = $("#checkout", form);
-  const elObs = $("#observacoes", form);
-  const elMsg = $("#formMsg") || $(".form-msg") || $("#msg");
+  const elObs = $("#obs", form);
+  const elMsg = $("#msg") || $(".form-msg");
+  const btnLimpar = $("#btnLimpar");
+
+  // ativa máscaras
+  maskDateInput(elCheckin);
+  maskDateInput(elCheckout);
+  maskWhatsappInput(elWhats);
+
+  // limpar
+  if (btnLimpar) {
+    btnLimpar.addEventListener("click", () => {
+      if (elNome) elNome.value = "";
+      if (elWhats) elWhats.value = "";
+      if (elCheckin) elCheckin.value = "";
+      if (elCheckout) elCheckout.value = "";
+      if (elObs) elObs.value = "";
+      setMsg(elMsg, "");
+      elNome?.focus?.();
+    });
+  }
 
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     setMsg(elMsg, "");
 
-    // Coleta
+    // Coleta (BR)
     const nome_hospede = normalizeText(elNome?.value);
-    const checkin = normalizeText(elCheckin?.value);
-    const checkout = normalizeText(elCheckout?.value);
+    const checkinISO = brDateToISO(elCheckin?.value);
+    const checkoutISO = brDateToISO(elCheckout?.value);
     const observacoes = normalizeText(elObs?.value);
 
-    const whatsapp_norm = normalizeWhatsapp(elWhats?.value);
+    const whatsapp55 = normalizeWhatsappTo55(elWhats?.value);
 
     // Validação
     const errors = [];
@@ -116,26 +188,24 @@ import { supabase } from "./supabase.js";
       errors.push("Informe o nome do hóspede.");
     }
 
-    if (!isISODate(checkin)) {
-      errors.push("Informe a data de chegada (check-in).");
+    if (!checkinISO || !isValidISOCalendarDate(checkinISO)) {
+      errors.push("Informe a data de chegada (check-in) no formato DD/MM/AAAA.");
     }
 
-    if (!isISODate(checkout)) {
-      errors.push("Informe a data de saída (check-out).");
+    if (!checkoutISO || !isValidISOCalendarDate(checkoutISO)) {
+      errors.push("Informe a data de saída (check-out) no formato DD/MM/AAAA.");
     }
 
-    if (isISODate(checkin) && isISODate(checkout)) {
-      if (compareISO(checkout, checkin) < 0) {
+    if (isISODate(checkinISO) && isISODate(checkoutISO)) {
+      if (compareISO(checkoutISO, checkinISO) < 0) {
         errors.push("A data de saída não pode ser antes da chegada.");
       }
     }
 
-    // WhatsApp é altamente recomendado — mas você pode decidir se é obrigatório.
-    // Aqui: obrigatório (pra virar produto de uso diário).
-    if (!whatsapp_norm) {
+    if (!whatsapp55) {
       errors.push("Informe o WhatsApp do hóspede.");
-    } else if (!validateWhatsappIntlDigits(whatsapp_norm)) {
-      errors.push("WhatsApp inválido. Use DDD + número (ex.: (13) 99740-8157).");
+    } else if (!validateWhatsapp55(whatsapp55)) {
+      errors.push("WhatsApp inválido. Digite DDD + número (ex.: 11999998888).");
     }
 
     if (errors.length) {
@@ -157,9 +227,9 @@ import { supabase } from "./supabase.js";
       const payload = {
         user_id,
         nome_hospede,
-        whatsapp: whatsapp_norm, // digits intl sem "+"
-        checkin,                // YYYY-MM-DD
-        checkout,               // YYYY-MM-DD
+        whatsapp: whatsapp55,  // 5511...
+        checkin: checkinISO,   // YYYY-MM-DD
+        checkout: checkoutISO, // YYYY-MM-DD
         observacoes: observacoes || null,
       };
 
@@ -175,7 +245,6 @@ import { supabase } from "./supabase.js";
       setMsg(elMsg, "Reserva criada com sucesso ✅", "success");
 
       const newId = data?.id;
-      // Preferido: abre a reserva criada
       if (newId) {
         window.location.href = `/reserva.html?id=${encodeURIComponent(newId)}`;
       } else {
@@ -184,7 +253,6 @@ import { supabase } from "./supabase.js";
     } catch (err) {
       console.error("reserva-nova insert error:", err);
 
-      // Mensagem “humana”
       const msg =
         err?.message ||
         err?.error_description ||
