@@ -21,16 +21,14 @@
   <header class="topbar">
     <div class="wrap topbar-inner">
       <div class="brand">
-        <div class="brand-title">
-          Agenda <span class="brand-accent">BRsys</span>
-        </div>
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
         <div class="brand-sub muted">Nova reserva • V1</div>
       </div>
 
       <div class="userbox">
         <div class="muted small">Logado:</div>
         <div id="userEmail" class="mono small">carregando…</div>
-        <button id="logout" class="btn outline small">Sair</button>
+        <button id="logout" class="btn outline small" type="button">Sair</button>
       </div>
     </div>
   </header>
@@ -38,15 +36,21 @@
   <!-- Main -->
   <main class="wrap main">
 
+    <!-- Header / ações -->
     <section class="card">
       <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-        <h1 class="h1" style="margin:0;">Nova reserva</h1>
-        <a class="btn outline" href="/reservas.html">Voltar</a>
-      </div>
+        <div>
+          <h1 class="h1" style="margin:0;">Nova reserva</h1>
+          <p class="muted small" style="margin:6px 0 0 0;">
+            Preencha o básico (nome, WhatsApp e datas). Depois evoluímos.
+          </p>
+        </div>
 
-      <p class="muted" style="margin-top:8px;">
-        Preencha o básico (nome, WhatsApp e datas). Depois evoluímos.
-      </p>
+        <div class="row" style="gap:10px;flex-wrap:wrap;">
+          <a class="btn outline" href="/reservas.html">Voltar</a>
+          <a class="btn outline" href="/app.html">Home</a>
+        </div>
+      </div>
 
       <!-- FORM -->
       <form id="formReserva" autocomplete="off" style="margin-top:14px;">
@@ -74,19 +78,24 @@
             name="whatsapp"
             placeholder="(11) 99999-9999"
             inputmode="numeric"
+            autocomplete="off"
           />
           <div class="muted small" style="margin-top:6px;">
-            Dica: digite apenas números. O sistema formata automaticamente.
+            Dica: pode digitar com ou sem DDD. O sistema normaliza para WhatsApp.
           </div>
         </label>
 
-        <label class="label" for="quartoId">Quarto</label>
-<select id="quartoId" class="input">
-  <option value="">(sem quarto)</option>
-</select>
-<p class="muted small" style="margin-top:6px;">
-  Dica: cadastre os quartos em <a class="muted" href="/quartos.html">Conta → Quartos</a>.
-</p>
+        <!-- Quarto -->
+        <label class="label" style="margin-top:12px;">
+          Quarto
+          <select id="quartoId" class="input">
+            <option value="">(sem quarto)</option>
+          </select>
+
+          <div class="muted small" style="margin-top:6px;">
+            Dica: cadastre e organize em <a class="muted" href="/quartos.html">Quartos</a>.
+          </div>
+        </label>
 
         <!-- Datas -->
         <div class="grid-2" style="margin-top:12px;">
@@ -100,6 +109,7 @@
               required
               placeholder="DD/MM/AAAA"
               inputmode="numeric"
+              autocomplete="off"
             />
           </label>
 
@@ -113,6 +123,7 @@
               required
               placeholder="DD/MM/AAAA"
               inputmode="numeric"
+              autocomplete="off"
             />
           </label>
         </div>
@@ -125,7 +136,7 @@
             id="obs"
             name="obs"
             rows="3"
-            placeholder="Ex: Quarto 03, pagamento antecipado via Pix…"
+            placeholder="Ex: pagamento via Pix, cama extra, observações do hóspede…"
           ></textarea>
         </label>
 
@@ -134,13 +145,14 @@
 
         <!-- Ações -->
         <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;">
-          <button id="btnSalvar" type="submit" class="btn primary">
-            Salvar reserva
-          </button>
+          <button id="btnSalvar" type="submit" class="btn primary">Salvar reserva</button>
+          <button id="btnLimpar" type="button" class="btn outline">Limpar</button>
+        </div>
 
-          <button id="btnLimpar" type="button" class="btn outline">
-            Limpar
-          </button>
+        <!-- Atalhos rápidos -->
+        <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+          <a class="btn outline small" href="/hoje.html">Ir para Hoje</a>
+          <a class="btn outline small" href="/quartos.html">Gerenciar Quartos</a>
         </div>
 
       </form>
@@ -162,7 +174,6 @@
   <!-- Auth guard + email -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
-
     const user = await requireAuth({
       redirectTo: "/entrar.html?next=/reserva-nova.html",
       renderUserInfo: false
