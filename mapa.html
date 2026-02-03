@@ -2,11 +2,11 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <title>Mapa • Agenda BRsys</title>
+  <title>Mapa de Quartos • Agenda BRsys</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Mapa de quartos: livre, ocupado, entra/sai hoje e previsão." />
+  <meta name="description" content="Mapa de quartos: livre, reservado e ocupado, com ações rápidas." />
   <link rel="canonical" href="https://agenda.brsys.com.br/mapa.html" />
 
   <link rel="icon" type="image/png" href="/img/favicon.png" />
@@ -22,7 +22,7 @@
     <div class="wrap topbar-inner">
       <div class="brand">
         <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
-        <div class="brand-sub muted">Mapa • V1</div>
+        <div class="brand-sub muted">Mapa de quartos • V1</div>
       </div>
 
       <div class="userbox">
@@ -35,48 +35,37 @@
 
   <main class="wrap main">
 
-    <!-- Header ações -->
     <section class="card">
       <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <div>
-          <h1 class="h1" style="margin:0;">Mapa de quartos</h1>
-          <div id="summary" class="muted small" style="margin-top:6px;">Carregando…</div>
+          <h1 class="h1" style="margin:0;">Mapa</h1>
+          <div id="todayLabel" class="muted small" style="margin-top:6px;">—</div>
         </div>
 
         <div class="row" style="gap:10px;flex-wrap:wrap;">
+          <a class="btn outline" href="/app.html">Voltar</a>
           <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
-          <a class="btn outline" href="/quartos.html">Gerenciar quartos</a>
-          <a class="btn outline" href="/app.html">Home</a>
         </div>
       </div>
 
-      <!-- Busca -->
-      <div style="margin-top:14px;">
-        <label class="label" style="margin:0;">
-          Buscar quarto
-          <input class="input" id="q" type="text" placeholder="Ex: S02, Suíte, 03..." />
-        </label>
-      </div>
-
-      <!-- Filtros -->
       <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
-        <button class="btn outline small" data-filter="all">Todos</button>
-        <button class="btn outline small" data-filter="free">Livres</button>
-        <button class="btn outline small" data-filter="occ">Ocupados</button>
-        <button class="btn outline small" data-filter="today">Hoje</button>
-      </div>
+        <input id="qSearch" class="input" placeholder="Buscar quarto (ex: 04, suíte, duplex)" style="max-width:360px;" />
+        <select id="qFilter" class="input" style="max-width:220px;">
+          <option value="all">Todos</option>
+          <option value="livre">Livres</option>
+          <option value="ocupado">Ocupados</option>
+          <option value="reservado_hoje">Reservados (entra hoje)</option>
+          <option value="reservado_futuro">Reservados (futuro)</option>
+        </select>
 
-      <div id="msg" class="muted small" style="margin-top:10px;"></div>
+        <button id="btnReload" class="btn outline">Recarregar</button>
+        <div id="msg" class="muted small" style="margin-left:auto;"></div>
+      </div>
     </section>
 
-    <!-- Grid -->
     <section class="card" style="margin-top:14px;">
-
-      <!-- Loading -->
       <div id="stateLoading">
-        <h2 class="h2" style="margin:0;">Carregando…</h2>
-        <p class="muted">Montando o mapa.</p>
-
+        <p class="muted">Carregando mapa…</p>
         <div class="skeleton">
           <div class="sk-line"></div>
           <div class="sk-line"></div>
@@ -84,26 +73,19 @@
         </div>
       </div>
 
-      <!-- Empty -->
       <div id="stateEmpty" style="display:none;">
-        <h2 class="h2" style="margin:0;">Nenhum quarto cadastrado</h2>
-        <p class="muted" style="margin-top:8px;">Cadastre os quartos para usar o mapa e o walk-in.</p>
-
-        <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
-          <a class="btn primary" href="/quartos.html">Cadastrar quartos</a>
-          <a class="btn outline" href="/app.html">Voltar</a>
-        </div>
+        <p class="muted">Nenhum quarto cadastrado ainda.</p>
+        <a class="btn primary" href="/quartos.html">Cadastrar quartos</a>
       </div>
 
-      <!-- Content -->
-      <div id="stateGrid" style="display:none;">
-        <div id="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;"></div>
+      <div id="grid"
+           style="display:none;margin-top:6px;
+           display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
       </div>
-
     </section>
 
     <footer class="foot muted small">
-      BRsys Agenda • V1 • suporte via WhatsApp
+      BRsys Agenda • Mapa • ações rápidas
     </footer>
   </main>
 
@@ -115,7 +97,7 @@
     <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
   </nav>
 
-  <!-- Auth guard -->
+  <!-- Guard + user email -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
     const user = await requireAuth({ redirectTo: "/entrar.html?next=/mapa.html", renderUserInfo: false });
