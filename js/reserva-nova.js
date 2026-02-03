@@ -1,4 +1,8 @@
-// /js/reserva-nova.js — cria reserva (V1) + vincula quarto_id (V2 ready)
+// /js/reserva-nova.js — cria reserva (V1.7)
+// - suporta query: ?quarto_id=UUID (novo) OU ?quarto=UUID (legado)
+// - suporta query: ?walkin=1 -> preenche checkin=hoje, checkout=amanhã
+// - mantém contrato WhatsApp: DB armazena digits intl sem "+": 5513997408157
+
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
@@ -20,15 +24,13 @@ function setMsg(text = "", type = "info") {
 
 function setBusy(on) {
   const btn = $("#btnSalvar");
-  if (btn) {
-    btn.disabled = !!on;
-    btn.textContent = on ? "Salvando..." : "Salvar reserva";
-  }
+  if (!btn) return;
+  btn.disabled = !!on;
+  btn.textContent = on ? "Salvando..." : "Salvar reserva";
 }
 
 /* =========================
-   WhatsApp helpers (contrato)
-   DB armazena digits intl sem "+"
+   Helpers: digits / WhatsApp
 ========================= */
 function onlyDigits(v = "") {
   return String(v).replace(/\D/g, "");
@@ -42,16 +44,56 @@ function normalizeWhatsappIntl(raw) {
   return d;
 }
 
+// máscara visual simples: (DD) 9xxxx-xxxx / (DD) xxxx-xxxx
+function maskBRPhoneInput(el) {
+  if (!el) return;
+  el.addEventListener("input", () => {
+    const d = onlyDigits(el.value).slice(0, 11);
+    if (!d) { el.value = ""; return; }
+    // tenta formatar como BR (sem +55 na tela, só DDD+num)
+    // se usuário digitou 55..., remove pro display
+    const local = d.startsWith("55") ? d.slice(2) : d;
+    const ddd = local.slice(0, 2);
+    const num = local.slice(2);
+
+    if (num.length <= 8) {
+      // fixo
+      const a = num.slice(0, 4);
+      const b = num.slice(4, 8);
+      el.value = `(${ddd}) ${a}${b ? "-" + b : ""}`.trim();
+      return;
+    } else {
+      // celular 9 dígitos
+      const a = num.slice(0, 5);
+      const b = num.slice(5, 9);
+      el.value = `(${ddd}) ${a}${b ? "-" + b : ""}`.trim();
+      return;
+    }
+  });
+}
+
 /* =========================
-   Date helpers (DD/MM/YYYY -> YYYY-MM-DD)
+   Date helpers
 ========================= */
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+function isoTodayLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function isoAddDays(iso, days = 1) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+  const dt = new Date(`${iso}T00:00:00`);
+  dt.setDate(dt.getDate() + Number(days || 0));
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
 function isValidISODate(iso) {
-  // espera YYYY-MM-DD
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
   const [y, m, d] = iso.split("-").map(n => parseInt(n, 10));
   if (m < 1 || m > 12) return false;
   if (d < 1 || d > 31) return false;
-  // checagem real (Date)
   const dt = new Date(`${iso}T00:00:00`);
   return dt.getFullYear() === y && (dt.getMonth() + 1) === m && dt.getDate() === d;
 }
@@ -74,7 +116,7 @@ function isoToBR(iso) {
 }
 
 /* =========================
-   Input mask (DD/MM/AAAA)
+   Input mask: DD/MM/AAAA
 ========================= */
 function maskBRDateInput(el) {
   if (!el) return;
@@ -115,13 +157,13 @@ async function loadQuartos(userId) {
     const opt = document.createElement("option");
     opt.value = q.id;
     const cap = q.capacidade ? ` • cap ${q.capacidade}` : "";
-    opt.textContent = `${q.codigo} • ${q.nome}${cap}`;
+    opt.textContent = `${q.codigo || ""} • ${q.nome || "Quarto"}${cap}`.trim();
     sel.appendChild(opt);
   });
 }
 
 /* =========================
-   Form actions
+   Form
 ========================= */
 function clearForm() {
   $("#nome") && ($("#nome").value = "");
@@ -145,7 +187,6 @@ function getFormPayload(userId) {
   const checkout = brToISO(checkoutBR);
   const whatsapp = normalizeWhatsappIntl(whatsappRaw) || null;
 
-  // validações
   if (!nome_hospede) throw new Error("Informe o nome do hóspede.");
   if (!checkin) throw new Error("Check-in inválido. Use DD/MM/AAAA.");
   if (!checkout) throw new Error("Check-out inválido. Use DD/MM/AAAA.");
@@ -158,12 +199,11 @@ function getFormPayload(userId) {
     checkin,
     checkout,
     observacoes: observacoes || null,
-    quarto_id, // 👈 vínculo com quarto (se existir no schema)
+    quarto_id,
   };
 }
 
 async function insertReserva(payload) {
-  // tenta inserir com quarto_id (se a coluna existir)
   const { data, error } = await supabase
     .from("agenda_reservas")
     .insert(payload)
@@ -172,13 +212,11 @@ async function insertReserva(payload) {
 
   if (!error) return data?.id;
 
-  // fallback: se ainda NÃO criou a coluna quarto_id no banco, a insert vai falhar
-  // com “column agenda_reservas.quarto_id does not exist”
-  const msg = String(error?.message || "");
-  const isMissingColumn = msg.toLowerCase().includes("quarto_id") && msg.toLowerCase().includes("does not exist");
+  // fallback (caso coluna quarto_id ainda não exista)
+  const msg = String(error?.message || "").toLowerCase();
+  const isMissingColumn = msg.includes("quarto_id") && msg.includes("does not exist");
   if (!isMissingColumn) throw error;
 
-  // reenvia sem quarto_id
   const { quarto_id, ...payloadNoRoom } = payload;
   const { data: d2, error: e2 } = await supabase
     .from("agenda_reservas")
@@ -191,6 +229,54 @@ async function insertReserva(payload) {
 }
 
 /* =========================
+   Prefill from URL
+   - ?checkin=YYYY-MM-DD
+   - ?checkout=YYYY-MM-DD
+   - ?quarto_id=UUID (novo)
+   - ?quarto=UUID (legado)
+   - ?walkin=1 -> preenche hoje/amanhã (se campos vazios)
+========================= */
+function applyPrefillFromURL() {
+  try {
+    const url = new URL(window.location.href);
+
+    const ci = url.searchParams.get("checkin");
+    const co = url.searchParams.get("checkout");
+
+    const quartoIdNew = url.searchParams.get("quarto_id");
+    const quartoIdOld = url.searchParams.get("quarto");
+    const quartoId = (quartoIdNew || quartoIdOld || "").trim();
+
+    const walkin = url.searchParams.get("walkin") === "1";
+
+    // datas
+    if (walkin) {
+      const today = isoTodayLocal();
+      const tomorrow = isoAddDays(today, 1);
+
+      const inEl = $("#checkin");
+      const outEl = $("#checkout");
+
+      // só preenche se estiver vazio (não briga com usuário)
+      if (inEl && !inEl.value) inEl.value = isoToBR(today);
+      if (outEl && !outEl.value) outEl.value = isoToBR(tomorrow);
+
+      // sugestão leve na obs se estiver vazia
+      const obsEl = $("#obs");
+      if (obsEl && !obsEl.value) obsEl.value = "Walk-in";
+    } else {
+      if (ci && isValidISODate(ci) && $("#checkin")) $("#checkin").value = isoToBR(ci);
+      if (co && isValidISODate(co) && $("#checkout")) $("#checkout").value = isoToBR(co);
+    }
+
+    // quarto (não seta aqui ainda se a lista não carregou; guardamos)
+    return { quartoId };
+  } catch {
+    return { quartoId: "" };
+  }
+}
+
+/* =========================
    Boot
 ========================= */
 (async function boot() {
@@ -200,12 +286,21 @@ async function insertReserva(payload) {
   });
   if (!user) return;
 
-  // máscaras de data
+  // máscaras
   maskBRDateInput($("#checkin"));
   maskBRDateInput($("#checkout"));
+  maskBRPhoneInput($("#whatsapp"));
+
+  // prefill (pega quartoId para aplicar após carregar select)
+  const { quartoId } = applyPrefillFromURL();
 
   // carrega quartos
   await loadQuartos(user.id);
+
+  // aplica quarto após carregar options
+  if (quartoId && $("#quartoId")) {
+    $("#quartoId").value = quartoId;
+  }
 
   // limpar
   $("#btnLimpar")?.addEventListener("click", () => clearForm());
@@ -224,8 +319,6 @@ async function insertReserva(payload) {
       const id = await insertReserva(payload);
 
       setMsg("Reserva criada ✅", "ok");
-
-      // abre a reserva (tela de edição/detalhe)
       window.location.href = `/reserva.html?id=${encodeURIComponent(id)}`;
     } catch (err) {
       console.error("[reserva-nova] submit error:", err);
@@ -234,15 +327,4 @@ async function insertReserva(payload) {
       setBusy(false);
     }
   });
-
-  // prefill (opcional): se vier ?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&quarto=uuid
-  try {
-    const url = new URL(window.location.href);
-    const ci = url.searchParams.get("checkin");
-    const co = url.searchParams.get("checkout");
-    const q = url.searchParams.get("quarto");
-    if (ci && isValidISODate(ci) && $("#checkin")) $("#checkin").value = isoToBR(ci);
-    if (co && isValidISODate(co) && $("#checkout")) $("#checkout").value = isoToBR(co);
-    if (q && $("#quartoId")) $("#quartoId").value = q;
-  } catch {}
 })();
