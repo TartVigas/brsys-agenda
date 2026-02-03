@@ -2,11 +2,11 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <title>Mapa de Quartos • Agenda BRsys</title>
+  <title>Mapa • Agenda BRsys</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Mapa de quartos com ocupação e previsões (Micro-PMS V1)." />
+  <meta name="description" content="Mapa de quartos: livre, ocupado, entra/sai hoje e previsão." />
   <link rel="canonical" href="https://agenda.brsys.com.br/mapa.html" />
 
   <link rel="icon" type="image/png" href="/img/favicon.png" />
@@ -22,7 +22,7 @@
     <div class="wrap topbar-inner">
       <div class="brand">
         <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
-        <div class="brand-sub muted">Mapa de quartos • V1</div>
+        <div class="brand-sub muted">Mapa • V1</div>
       </div>
 
       <div class="userbox">
@@ -45,6 +45,7 @@
 
         <div class="row" style="gap:10px;flex-wrap:wrap;">
           <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
+          <a class="btn outline" href="/quartos.html">Gerenciar quartos</a>
           <a class="btn outline" href="/app.html">Home</a>
         </div>
       </div>
@@ -68,13 +69,13 @@
       <div id="msg" class="muted small" style="margin-top:10px;"></div>
     </section>
 
-    <!-- Conteúdo -->
+    <!-- Grid -->
     <section class="card" style="margin-top:14px;">
 
       <!-- Loading -->
       <div id="stateLoading">
         <h2 class="h2" style="margin:0;">Carregando…</h2>
-        <p class="muted">Montando o mapa de quartos.</p>
+        <p class="muted">Montando o mapa.</p>
 
         <div class="skeleton">
           <div class="sk-line"></div>
@@ -86,9 +87,7 @@
       <!-- Empty -->
       <div id="stateEmpty" style="display:none;">
         <h2 class="h2" style="margin:0;">Nenhum quarto cadastrado</h2>
-        <p class="muted" style="margin-top:8px;">
-          Cadastre os quartos para liberar o mapa e o walk-in.
-        </p>
+        <p class="muted" style="margin-top:8px;">Cadastre os quartos para usar o mapa e o walk-in.</p>
 
         <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
           <a class="btn primary" href="/quartos.html">Cadastrar quartos</a>
@@ -96,11 +95,9 @@
         </div>
       </div>
 
-      <!-- Grid -->
+      <!-- Content -->
       <div id="stateGrid" style="display:none;">
-        <div id="grid"
-             style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
-        </div>
+        <div id="grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;"></div>
       </div>
 
     </section>
@@ -108,7 +105,6 @@
     <footer class="foot muted small">
       BRsys Agenda • V1 • suporte via WhatsApp
     </footer>
-
   </main>
 
   <!-- Bottom Nav -->
@@ -119,7 +115,7 @@
     <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
   </nav>
 
-  <!-- Guard -->
+  <!-- Auth guard -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
     const user = await requireAuth({ redirectTo: "/entrar.html?next=/mapa.html", renderUserInfo: false });
@@ -131,4 +127,3 @@
   <script type="module" src="/js/mapa.js"></script>
 </body>
 </html>
-
