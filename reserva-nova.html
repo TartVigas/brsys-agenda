@@ -21,7 +21,9 @@
   <header class="topbar">
     <div class="wrap topbar-inner">
       <div class="brand">
-        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-title">
+          Agenda <span class="brand-accent">BRsys</span>
+        </div>
         <div class="brand-sub muted">Nova reserva • V1</div>
       </div>
 
@@ -33,6 +35,7 @@
     </div>
   </header>
 
+  <!-- Main -->
   <main class="wrap main">
 
     <section class="card">
@@ -45,41 +48,93 @@
         Preencha o básico (nome, WhatsApp e datas). Depois evoluímos.
       </p>
 
+      <!-- FORM -->
       <form id="formReserva" autocomplete="off" style="margin-top:14px;">
+
+        <!-- Nome -->
         <label class="label">
           Nome do hóspede
-          <input class="input" type="text" id="nome" name="nome" required placeholder="Ex: João da Silva" />
+          <input
+            class="input"
+            type="text"
+            id="nome"
+            name="nome"
+            required
+            placeholder="Ex: João da Silva"
+          />
         </label>
 
+        <!-- WhatsApp -->
         <label class="label" style="margin-top:12px;">
           WhatsApp
-          <input class="input" type="text" id="whatsapp" name="whatsapp" placeholder="(13) 99740-8157" inputmode="numeric" />
-          <div class="muted small" style="margin-top:6px;">Dica: você vai usar isso pra abrir conversa com 1 clique.</div>
+          <input
+            class="input"
+            type="text"
+            id="whatsapp"
+            name="whatsapp"
+            placeholder="(11) 99999-9999"
+            inputmode="numeric"
+          />
+          <div class="muted small" style="margin-top:6px;">
+            Dica: digite apenas números. O sistema formata automaticamente.
+          </div>
         </label>
 
+        <!-- Datas -->
         <div class="grid-2" style="margin-top:12px;">
           <label class="label">
             Check-in
-            <input class="input" type="text" id="checkin" name="checkin" required placeholder="DD/MM/AAAA" inputmode="numeric" />
+            <input
+              class="input"
+              type="text"
+              id="checkin"
+              name="checkin"
+              required
+              placeholder="DD/MM/AAAA"
+              inputmode="numeric"
+            />
           </label>
 
           <label class="label">
             Check-out
-            <input class="input" type="text" id="checkout" name="checkout" required placeholder="DD/MM/AAAA" inputmode="numeric" />
+            <input
+              class="input"
+              type="text"
+              id="checkout"
+              name="checkout"
+              required
+              placeholder="DD/MM/AAAA"
+              inputmode="numeric"
+            />
           </label>
         </div>
 
+        <!-- Observações -->
         <label class="label" style="margin-top:12px;">
           Observações
-          <textarea class="input" id="obs" name="obs" rows="3" placeholder="Ex: Quarto 03, pagamento na chegada…"></textarea>
+          <textarea
+            class="input"
+            id="obs"
+            name="obs"
+            rows="3"
+            placeholder="Ex: Quarto 03, pagamento antecipado via Pix…"
+          ></textarea>
         </label>
 
+        <!-- Mensagem -->
         <div id="msg" class="muted small" style="margin-top:10px;"></div>
 
+        <!-- Ações -->
         <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;">
-          <button id="btnSalvar" type="submit" class="btn primary">Salvar reserva</button>
-          <button id="btnLimpar" type="button" class="btn outline">Limpar</button>
+          <button id="btnSalvar" type="submit" class="btn primary">
+            Salvar reserva
+          </button>
+
+          <button id="btnLimpar" type="button" class="btn outline">
+            Limpar
+          </button>
         </div>
+
       </form>
     </section>
 
@@ -96,15 +151,22 @@
     <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
   </nav>
 
-  <!-- Guard e email do user -->
+  <!-- Auth guard + email -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
-    const user = await requireAuth({ redirectTo: "/entrar.html?next=/reserva-nova.html", renderUserInfo: false });
+
+    const user = await requireAuth({
+      redirectTo: "/entrar.html?next=/reserva-nova.html",
+      renderUserInfo: false
+    });
+
     const el = document.getElementById("userEmail");
     if (el) el.textContent = user?.email || "(sem e-mail)";
   </script>
 
+  <!-- Scripts -->
   <script type="module" src="/js/nav.js"></script>
   <script type="module" src="/js/reserva-nova.js"></script>
+
 </body>
 </html>
