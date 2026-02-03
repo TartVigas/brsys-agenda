@@ -2,54 +2,117 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Hoje • BRsys Agenda</title>
+  <title>Conta • Agenda BRsys</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Conta e configurações da Agenda BRsys." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/conta.html" />
+
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/favicon.png" />
+
   <link rel="stylesheet" href="/css/app.css" />
 </head>
-<body class="app">
 
+<body class="app-body">
+
+  <!-- Topbar -->
   <header class="topbar">
-    <a class="brand" href="/hoje.html">BRsys Agenda</a>
-    <div class="topbar-right">
-      <div id="hotelBadge"></div>
-      <div id="userInfo"></div>
-      <button id="logout" class="btn ghost">Sair</button>
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-sub muted">Conta • Configurações • V1</div>
+      </div>
+
+      <div class="userbox">
+        <div class="muted small">Logado:</div>
+        <div id="userEmail" class="mono small">carregando…</div>
+        <button id="logout" class="btn outline small">Sair</button>
+      </div>
     </div>
   </header>
 
-  <nav class="tabs">
-    <a href="/hoje.html" class="tab active">Hoje</a>
-    <a href="/reservas.html" class="tab">Reservas</a>
-    <a href="/hospedes.html" class="tab">Hóspedes</a>
-    <a href="/templates.html" class="tab">Templates</a>
-    <a href="/conta.html" class="tab">Conta</a>
-  </nav>
+  <main class="wrap main">
 
-  <main class="container">
-    <h1>Hoje</h1>
+    <!-- Perfil -->
     <section class="card">
-      <div id="todaySummary" class="muted">Carregando…</div>
+      <h1 class="h1" style="margin:0;">Conta</h1>
+      <p class="muted" style="margin-top:8px;">
+        Configurações do ambiente e atalhos do sistema.
+      </p>
+
+      <div class="grid-2" style="margin-top:14px;gap:12px;">
+        <div class="mini-card">
+          <div class="muted small">Usuário</div>
+          <div id="userName" style="font-weight:900;margin-top:6px;">—</div>
+          <div id="userEmail2" class="muted small mono" style="margin-top:6px;">—</div>
+        </div>
+
+        <div class="mini-card">
+          <div class="muted small">Status</div>
+          <div id="statusText" style="font-weight:900;margin-top:6px;">Verificando…</div>
+          <div id="statusSub" class="muted small" style="margin-top:6px;">Sessão e conexão</div>
+        </div>
+      </div>
+
+      <div id="msg" class="muted small" style="margin-top:10px;"></div>
     </section>
 
-    <section class="grid">
-      <div class="card">
-        <h2>Chegadas</h2>
-        <div id="arrivals"></div>
+    <!-- Configurações -->
+    <section class="card" style="margin-top:14px;">
+      <h2 class="h2" style="margin:0;">Configurações</h2>
+      <p class="muted small" style="margin-top:8px;">
+        Aqui ficam as telas que transformam a Agenda em “mini PMS” (sem complicação).
+      </p>
+
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+        <a class="btn primary" href="/quartos.html">Quartos</a>
+        <a class="btn outline" href="/reservas.html">Reservas</a>
+        <a class="btn outline" href="/app.html">Home</a>
       </div>
 
-      <div class="card">
-        <h2>Saídas</h2>
-        <div id="departures"></div>
-      </div>
-
-      <div class="card">
-        <h2>Hospedados</h2>
-        <div id="inhouse"></div>
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+        <button id="btnPing" class="btn outline small" type="button">Testar conexão</button>
+        <button id="btnCopyEmail" class="btn outline small" type="button">Copiar e-mail</button>
       </div>
     </section>
+
+    <!-- Ajuda -->
+    <section class="card" style="margin-top:14px;">
+      <h2 class="h2" style="margin:0;">Ajuda</h2>
+      <p class="muted small" style="margin-top:8px;">
+        Suporte via WhatsApp. Se algo travar, mande print do erro + o que você estava fazendo.
+      </p>
+
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+        <a class="btn outline" target="_blank" rel="noopener noreferrer" href="https://wa.me/5513997408157">Suporte WhatsApp</a>
+      </div>
+    </section>
+
+    <footer class="foot muted small">
+      BRsys Agenda • V1 • suporte via WhatsApp
+    </footer>
+
   </main>
 
-  <script type="module" src="/js/hoje.js"></script>
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
+    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
+    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+  </nav>
+
+  <!-- Guard + user email -->
+  <script type="module">
+    import { requireAuth } from "/js/auth.js";
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/conta.html", renderUserInfo: false });
+    const el = document.getElementById("userEmail");
+    if (el) el.textContent = user?.email || "(sem e-mail)";
+  </script>
+
+  <script type="module" src="/js/nav.js"></script>
+  <script type="module" src="/js/conta.js"></script>
 </body>
 </html>
-
