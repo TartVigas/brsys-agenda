@@ -28,7 +28,7 @@
       <div class="userbox">
         <div class="muted small">Logado:</div>
         <div id="userEmail" class="mono small">carregando…</div>
-        <button id="logout" class="btn outline small">Sair</button>
+        <button id="logout" class="btn outline small" type="button">Sair</button>
       </div>
     </div>
   </header>
@@ -64,16 +64,40 @@
       <!-- Form -->
       <div id="stateForm" style="display:none;">
 
-        <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-          <div>
+        <!-- Header -->
+        <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div style="min-width:260px;">
             <h1 class="h1" style="margin:0;">Reserva</h1>
             <div id="meta" class="muted small" style="margin-top:6px;"></div>
+
+            <!-- Status -->
+            <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap;align-items:center;">
+              <span class="muted small">Status:</span>
+              <span id="resStatusPill" class="pill">—</span>
+              <span id="resStatusHint" class="muted small" style="display:none;"></span>
+            </div>
           </div>
 
-          <div class="row" style="gap:10px;flex-wrap:wrap;">
+          <!-- Ações PMS -->
+          <div class="row" style="gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center;">
             <a class="btn outline" href="/reservas.html">Voltar</a>
+
+            <button id="btnCheckin" type="button" class="btn primary" style="white-space:nowrap;display:none;">
+              Fazer check-in
+            </button>
+
+            <button id="btnCheckout" type="button" class="btn outline" style="white-space:nowrap;display:none;">
+              Fazer checkout
+            </button>
+
+            <button id="btnCancelar" type="button" class="btn outline" style="white-space:nowrap;display:none;">
+              Cancelar
+            </button>
           </div>
         </div>
+
+        <!-- Mensagem PMS (global) -->
+        <div id="pmsMsg" class="muted small" style="margin-top:10px;display:none;"></div>
 
         <form id="formReserva" autocomplete="off" style="margin-top:14px;">
           <label class="label">
@@ -191,7 +215,7 @@
                   </label>
                 </div>
 
-                <button class="btn primary" style="margin-top:10px;">+ Adicionar</button>
+                <button class="btn primary" style="margin-top:10px;" type="submit">+ Adicionar</button>
               </form>
 
               <div id="listaLanc" style="margin-top:12px;"></div>
@@ -223,7 +247,7 @@
                   <input id="pObs" class="input" placeholder="Ex: 2x cartão, comprovante..." />
                 </label>
 
-                <button class="btn primary" style="margin-top:10px;">+ Registrar</button>
+                <button class="btn primary" style="margin-top:10px;" type="submit">+ Registrar</button>
               </form>
 
               <div id="listaPag" style="margin-top:12px;"></div>
@@ -234,7 +258,7 @@
           <div id="contaMsg" class="muted small" style="margin-top:12px;"></div>
 
           <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
-            <button id="btnFecharConta" class="btn outline" disabled style="opacity:.55;">
+            <button id="btnFecharConta" class="btn outline" disabled style="opacity:.55;" type="button">
               Fechar conta / Checkout
             </button>
           </div>
@@ -269,7 +293,6 @@
   <script type="module" src="/js/reserva.js"></script>
 
   <!-- Conta (micro-PMS) -->
-  <!-- Ative quando criar o arquivo /js/reserva-conta.js -->
   <script type="module" src="/js/reserva-conta.js"></script>
 
 </body>
