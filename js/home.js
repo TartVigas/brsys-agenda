@@ -1,4 +1,4 @@
-// /js/home.js — PMS V1.6 (Home operacional + Quartos)
+// /js/home.js — PMS V1.7 (Home operacional + Quartos)
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
@@ -6,7 +6,6 @@ import { requireAuth } from "./auth.js";
    Date helpers
 ========================= */
 function toISODate(d = new Date()) {
-  // YYYY-MM-DD (sem timezone drama)
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
@@ -16,7 +15,7 @@ function toISODate(d = new Date()) {
 function fmtBR(isoDate) {
   if (!isoDate) return "—";
   const [y, m, d] = String(isoDate).split("-");
-  if (!y || !m || !d) return isoDate;
+  if (!y || !m || !d) return String(isoDate);
   return `${d}/${m}/${y}`;
 }
 
@@ -31,7 +30,6 @@ function onlyDigits(v = "") {
 function normalizeWhatsappIntl(raw) {
   const d = onlyDigits(raw);
   if (!d) return "";
-  // Se já vier 55..., mantém. Se vier DDD+numero, prefixa 55.
   if (d.startsWith("55")) return d;
   if (d.length === 10 || d.length === 11) return `55${d}`;
   return d;
@@ -48,41 +46,40 @@ function fmtWhatsappLabel(intlDigits) {
   const w = normalizeWhatsappIntl(intlDigits);
   if (!w) return "sem WhatsApp";
 
-  // Exibe +55 (13) 99740-8157 (quando possível)
-  if (!w.startsWith("55") || (w.length !== 12 && w.length !== 13)) {
-    return `+${w}`;
+  if (!w.startsWith("55")) return `+${w}`;
+
+  // +55 (DD) XXXXX-XXXX
+  if (w.length === 12 || w.length === 13) {
+    const ddd = w.slice(2, 4);
+    const num = w.slice(4);
+    if (num.length === 8) return `+55 (${ddd}) ${num.slice(0, 4)}-${num.slice(4)}`;
+    if (num.length === 9) return `+55 (${ddd}) ${num.slice(0, 5)}-${num.slice(5)}`;
   }
-
-  const ddd = w.slice(2, 4);
-  const num = w.slice(4);
-
-  // 8 ou 9 dígitos
-  if (num.length === 8) return `+55 (${ddd}) ${num.slice(0, 4)}-${num.slice(4)}`;
-  if (num.length === 9) return `+55 (${ddd}) ${num.slice(0, 5)}-${num.slice(5)}`;
-
   return `+${w}`;
 }
 
 /* =========================
-   UI helpers (consistentes)
+   DOM helpers
 ========================= */
+const byId = (id) => document.getElementById(id);
+
 function setText(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = String(value);
+  const el = byId(id);
+  if (el) el.textContent = String(value ?? "");
 }
 
 function setHTML(id, html) {
-  const el = document.getElementById(id);
-  if (el) el.innerHTML = html;
+  const el = byId(id);
+  if (el) el.innerHTML = html ?? "";
 }
 
 function showEl(id, on = true) {
-  const el = document.getElementById(id);
+  const el = byId(id);
   if (el) el.style.display = on ? "" : "none";
 }
 
 function setOpsMsg(text) {
-  const el = document.getElementById("opsMsg");
+  const el = byId("opsMsg");
   if (!el) return;
   el.textContent = text || "";
   el.style.display = text ? "block" : "none";
@@ -101,7 +98,22 @@ function escapeHtml(str = "") {
 }
 
 /* =========================
-   Render: Operação / Reservas
+   Supabase helpers
+========================= */
+async function countExact(query) {
+  const { count, error } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
+
+async function fetchRows(query) {
+  const { data, error } = await query;
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+/* =========================
+   Render: Itens de operação
 ========================= */
 function renderOpItem(r) {
   const id = r.id;
@@ -129,15 +141,10 @@ function renderOpItem(r) {
   `;
 }
 
-function renderRecentItem(r) {
-  return renderOpItem(r);
-}
-
 /* =========================
    Render: Quartos (Home)
 ========================= */
 function pill(text, type = "muted") {
-  // type: ok | warn | muted
   const color =
     type === "ok" ? "rgba(102,242,218,.95)" :
     type === "warn" ? "rgba(255,210,120,.95)" :
@@ -146,13 +153,23 @@ function pill(text, type = "muted") {
   return `<span class="pill" style="border-color:rgba(255,255,255,.12);color:${color};">${escapeHtml(text)}</span>`;
 }
 
+function roomTitle(room) {
+  const codigo = (room.codigo || "").trim();
+  const nome = (room.nome || "").trim();
+  if (codigo && nome) return `${codigo} • ${nome}`;
+  return codigo || nome || "Quarto";
+}
+
+function roomMeta(room) {
+  const tipo = (room.tipo || "—").trim();
+  const cap = (room.capacidade ?? "—");
+  return `${tipo} • Cap: ${cap}`;
+}
+
 function renderRoomCard(room, occMap) {
-  const occ = occMap.get(room.id); // { id, nome_hospede, whatsapp, quarto_id }
-
-  const title = `${escapeHtml(room.codigo || "")} • ${escapeHtml(room.nome || "Quarto")}`;
-  const meta = `${escapeHtml(room.tipo || "—")} • Cap: ${room.capacidade ?? "—"}`;
-
+  const occ = occMap.get(room.id);
   const isOcc = !!occ;
+
   const st = isOcc ? pill("Ocupado", "warn") : pill("Livre", "ok");
 
   const sub = isOcc
@@ -166,12 +183,12 @@ function renderRoomCard(room, occMap) {
     <div class="mini-card" style="display:flex;flex-direction:column;gap:6px;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
         <div style="font-weight:900;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-          ${title}
+          ${escapeHtml(roomTitle(room))}
         </div>
         ${st}
       </div>
 
-      <div class="muted small">${meta}</div>
+      <div class="muted small">${escapeHtml(roomMeta(room))}</div>
       ${sub}
 
       <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;">
@@ -182,115 +199,110 @@ function renderRoomCard(room, occMap) {
   `;
 }
 
-async function loadRoomsHome(user, today) {
-  // IDs esperados no HTML:
-  // roomsLoading, roomsEmpty, roomsGrid
-  const loading = document.getElementById("roomsLoading");
-  const empty = document.getElementById("roomsEmpty");
-  const grid = document.getElementById("roomsGrid");
+async function loadRoomsHome(userId, today) {
+  const loading = byId("roomsLoading");
+  const empty = byId("roomsEmpty");
+  const grid = byId("roomsGrid");
 
-  const toggle = (el, on) => { if (el) el.style.display = on ? "" : "none"; };
+  // Se a Home não tiver a seção, sai sem erro
+  if (!loading || !empty || !grid) return;
 
-  toggle(loading, true);
-  toggle(empty, false);
-  toggle(grid, false);
+  loading.style.display = "";
+  empty.style.display = "none";
+  grid.style.display = "none";
+  grid.innerHTML = "";
 
-  // 1) quartos ativos
-  const { data: rooms, error: roomsErr } = await supabase
-    .from("agenda_quartos")
-    .select("id, codigo, nome, tipo, capacidade, ordem, ativo, created_at")
-    .eq("user_id", user.id)
-    .eq("ativo", true)
-    .order("ordem", { ascending: true })
-    .order("codigo", { ascending: true });
-
-  if (roomsErr) {
-    console.error("[home] rooms error:", roomsErr);
-    toggle(loading, false);
-    toggle(empty, true);
-    if (empty) empty.innerHTML = `<p class="muted">Erro ao carregar quartos.</p>`;
+  // 1) Quartos ativos
+  let rooms = [];
+  try {
+    rooms = await fetchRows(
+      supabase
+        .from("agenda_quartos")
+        .select("id, codigo, nome, tipo, capacidade, ordem, ativo, created_at")
+        .eq("user_id", userId)
+        .eq("ativo", true)
+        .order("ordem", { ascending: true })
+        .order("codigo", { ascending: true })
+    );
+  } catch (e) {
+    console.error("[home] rooms error:", e);
+    loading.style.display = "none";
+    empty.style.display = "";
+    empty.innerHTML = `<p class="muted">Erro ao carregar quartos.</p>`;
     return;
   }
 
-  if (!rooms || rooms.length === 0) {
-    toggle(loading, false);
-    toggle(empty, true);
+  if (!rooms.length) {
+    loading.style.display = "none";
+    empty.style.display = "";
     return;
   }
 
-  // 2) ocupação do “agora” (precisa de quarto_id preenchido)
-  const { data: occRows, error: occErr } = await supabase
-    .from("agenda_reservas")
-    .select("id, quarto_id, nome_hospede, whatsapp, checkin, checkout")
-    .eq("user_id", user.id)
-    .not("quarto_id", "is", null)
-    .lte("checkin", today)
-    .gt("checkout", today);
-
-  if (occErr) {
-    // não quebra a tela: só mostra tudo livre
-    console.warn("[home] occupancy warning:", occErr);
+  // 2) Ocupação "agora" (reserva com quarto_id, checkin <= hoje e checkout > hoje)
+  let occRows = [];
+  try {
+    occRows = await fetchRows(
+      supabase
+        .from("agenda_reservas")
+        .select("id, quarto_id, nome_hospede")
+        .eq("user_id", userId)
+        .not("quarto_id", "is", null)
+        .lte("checkin", today)
+        .gt("checkout", today)
+        .limit(300)
+    );
+  } catch (e) {
+    // não quebra: mostra tudo como livre
+    console.warn("[home] occupancy warning:", e);
+    occRows = [];
   }
 
   const occMap = new Map();
-  (occRows || []).forEach(r => {
+  occRows.forEach((r) => {
     if (r.quarto_id && !occMap.has(r.quarto_id)) occMap.set(r.quarto_id, r);
   });
 
-  // 3) render
-  if (grid) {
-    grid.innerHTML = rooms.map(r => renderRoomCard(r, occMap)).join("");
-  }
-
-  toggle(loading, false);
-  toggle(grid, true);
+  // 3) Render
+  grid.innerHTML = rooms.map((r) => renderRoomCard(r, occMap)).join("");
+  loading.style.display = "none";
+  grid.style.display = "grid";
 }
 
 /* =========================
-   Main load
+   KPIs + Operação
 ========================= */
-async function loadHome() {
-  const user = await requireAuth({ redirectTo: "/entrar.html?next=/app.html", renderUserInfo: false });
-  if (!user) return;
-
-  const today = toISODate(new Date());
-  setText("kpiHojeLabel", fmtBR(today));
-
-  // -------------------------
-  // KPIs (PMS)
-  // -------------------------
-  // IMPORTANTE: não reutilizar "baseCount" mutável em Promise.all
-  const pIn = supabase
-    .from("agenda_reservas")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("checkin", today);
-
-  const pOut = supabase
-    .from("agenda_reservas")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("checkout", today);
-
-  const pFut = supabase
-    .from("agenda_reservas")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .gt("checkin", today);
-
-  const pHosp = supabase
-    .from("agenda_reservas")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .lte("checkin", today)
-    .gt("checkout", today);
-
-  const [inRes, outRes, futRes, hospRes] = await Promise.all([pIn, pOut, pFut, pHosp]);
-
-  const cIn = inRes.count ?? 0;
-  const cOut = outRes.count ?? 0;
-  const cFut = futRes.count ?? 0;
-  const cHosp = hospRes.count ?? 0;
+async function loadKPIs(userId, today) {
+  const [cIn, cOut, cFut, cHosp] = await Promise.all([
+    countExact(
+      supabase
+        .from("agenda_reservas")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("checkin", today)
+    ),
+    countExact(
+      supabase
+        .from("agenda_reservas")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("checkout", today)
+    ),
+    countExact(
+      supabase
+        .from("agenda_reservas")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .gt("checkin", today)
+    ),
+    countExact(
+      supabase
+        .from("agenda_reservas")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .lte("checkin", today)
+        .gt("checkout", today)
+    ),
+  ]);
 
   setText("kpiCheckin", cIn);
   setText("kpiCheckout", cOut);
@@ -300,84 +312,77 @@ async function loadHome() {
   const totalOps = cIn + cOut;
   setText("kpiOperacao", totalOps ? `${totalOps} ações` : "tranquilo");
 
-  // -------------------------
-  // Quartos (grid) — Home
-  // -------------------------
-  // Só roda se existir no HTML (não quebra se você ainda não colou a seção)
-  if (document.getElementById("roomsGrid")) {
-    await loadRoomsHome(user, today);
-  }
+  // cards de operação (reusa counts)
+  setText("countChegadas", cIn);
+  setText("countSaidas", cOut);
+  setText("countHospedados", cHosp);
 
-  // -------------------------
-  // Operação de Hoje (listas)
-  // -------------------------
+  return { cIn, cOut, cFut, cHosp };
+}
+
+async function loadOperationLists(userId, today) {
   showEl("opsLoading", true);
   setOpsMsg("");
 
+  const fields = "id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at";
+
   try {
-    const fields = "id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at";
-
     const [chegadas, saidas, hospedados] = await Promise.all([
-      supabase
-        .from("agenda_reservas")
-        .select(fields)
-        .eq("user_id", user.id)
-        .eq("checkin", today)
-        .order("created_at", { ascending: false })
-        .limit(5),
-
-      supabase
-        .from("agenda_reservas")
-        .select(fields)
-        .eq("user_id", user.id)
-        .eq("checkout", today)
-        .order("created_at", { ascending: false })
-        .limit(5),
-
-      supabase
-        .from("agenda_reservas")
-        .select(fields)
-        .eq("user_id", user.id)
-        .lte("checkin", today)
-        .gt("checkout", today)
-        .order("checkin", { ascending: false })
-        .limit(5),
+      fetchRows(
+        supabase
+          .from("agenda_reservas")
+          .select(fields)
+          .eq("user_id", userId)
+          .eq("checkin", today)
+          .order("created_at", { ascending: false })
+          .limit(5)
+      ),
+      fetchRows(
+        supabase
+          .from("agenda_reservas")
+          .select(fields)
+          .eq("user_id", userId)
+          .eq("checkout", today)
+          .order("created_at", { ascending: false })
+          .limit(5)
+      ),
+      fetchRows(
+        supabase
+          .from("agenda_reservas")
+          .select(fields)
+          .eq("user_id", userId)
+          .lte("checkin", today)
+          .gt("checkout", today)
+          .order("checkin", { ascending: false })
+          .limit(5)
+      ),
     ]);
 
-    if (chegadas.error) throw chegadas.error;
-    if (saidas.error) throw saidas.error;
-    if (hospedados.error) throw hospedados.error;
-
-    // counts nos cards
-    setText("countChegadas", cIn);
-    setText("countSaidas", cOut);
-    setText("countHospedados", cHosp);
-
     // chegadas
-    if (!chegadas.data || chegadas.data.length === 0) {
+    if (!chegadas.length) {
       showEl("emptyChegadas", true);
       setHTML("listChegadas", "");
     } else {
       showEl("emptyChegadas", false);
-      setHTML("listChegadas", chegadas.data.map(renderOpItem).join(""));
+      setHTML("listChegadas", chegadas.map(renderOpItem).join(""));
     }
 
     // saídas
-    if (!saidas.data || saidas.data.length === 0) {
+    if (!saidas.length) {
       showEl("emptySaidas", true);
       setHTML("listSaidas", "");
     } else {
       showEl("emptySaidas", false);
-      setHTML("listSaidas", saidas.data.map(renderOpItem).join(""));
+      setHTML("listSaidas", saidas.map(renderOpItem).join(""));
     }
 
     // hospedados
-    if (!hospedados.data || hospedados.data.length === 0) {
+    if (!hospedados.length) {
       showEl("emptyHospedados", true);
       setHTML("listHospedados", "");
     } else {
       showEl("emptyHospedados", false);
-      setHTML("listHospedados", hospedados.data.map(renderOpItem).join(""));
+      setHTML("listHospedados", hospedados.map(renderOpItem).join(""));
     }
 
     showEl("opsLoading", false);
@@ -386,27 +391,33 @@ async function loadHome() {
     showEl("opsLoading", false);
     setOpsMsg("Erro ao carregar a operação. Recarregue a página.");
   }
+}
 
-  // -------------------------
-  // Últimas reservas (top 5)
-  // -------------------------
-  const loading = document.getElementById("homeLoading");
-  const empty = document.getElementById("homeEmpty");
-  const list = document.getElementById("homeList");
+/* =========================
+   Últimas reservas
+========================= */
+async function loadRecent(userId) {
+  const loading = byId("homeLoading");
+  const empty = byId("homeEmpty");
+  const list = byId("homeList");
+
+  if (loading) loading.style.display = "";
+  if (empty) empty.style.display = "none";
+  if (list) list.style.display = "none";
 
   try {
-    const { data, error } = await supabase
-      .from("agenda_reservas")
-      .select("id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    if (error) throw error;
+    const rows = await fetchRows(
+      supabase
+        .from("agenda_reservas")
+        .select("id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(5)
+    );
 
     if (loading) loading.style.display = "none";
 
-    if (!data || data.length === 0) {
+    if (!rows.length) {
       if (empty) empty.style.display = "block";
       if (list) list.style.display = "none";
       return;
@@ -415,7 +426,7 @@ async function loadHome() {
     if (empty) empty.style.display = "none";
     if (list) {
       list.style.display = "block";
-      list.innerHTML = data.map(renderRecentItem).join("");
+      list.innerHTML = rows.map(renderOpItem).join("");
     }
   } catch (e) {
     console.error("[home] recent error:", e);
@@ -425,6 +436,29 @@ async function loadHome() {
       empty.innerHTML = `<p class="muted">Erro ao carregar. Recarregue a página.</p>`;
     }
   }
+}
+
+/* =========================
+   Main
+========================= */
+async function loadHome() {
+  const user = await requireAuth({ redirectTo: "/entrar.html?next=/app.html", renderUserInfo: false });
+  if (!user?.id) return;
+
+  const today = toISODate(new Date());
+  setText("kpiHojeLabel", fmtBR(today));
+
+  // 1) KPIs
+  await loadKPIs(user.id, today);
+
+  // 2) Quartos (se existir seção)
+  await loadRoomsHome(user.id, today);
+
+  // 3) Operação do dia (listas)
+  await loadOperationLists(user.id, today);
+
+  // 4) Últimas reservas
+  await loadRecent(user.id);
 }
 
 loadHome();
