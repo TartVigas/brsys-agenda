@@ -1,265 +1,248 @@
-/* /js/reserva-nova.js
-   V1 — Insert em agenda_reservas com validação + conversão (datas/WhatsApp)
-
-   ESTE ARQUIVO ESTÁ ALINHADO COM O SEU reserva-nova.html:
-   - Form:        #formReserva
-   - Inputs:      #nome, #whatsapp, #checkin, #checkout, #obs
-   - Feedback:    #msg
-   - Botões:      #btnSalvar (submit), #btnLimpar (type=button)
-
-   Contrato Supabase (agenda_reservas):
-   - id, user_id, nome_hospede, whatsapp, checkin, checkout, observacoes, created_at
-   - checkin/checkout salvos como YYYY-MM-DD
-   - whatsapp salvo como dígitos (ex: 5511999998888)
-*/
-
+// /js/reserva-nova.js — cria reserva (V1) + vincula quarto_id (V2 ready)
 import { supabase } from "./supabase.js";
+import { requireAuth } from "./auth.js";
 
-(function () {
-  const $ = (sel, root = document) => root.querySelector(sel);
+const $ = (sel, root = document) => root.querySelector(sel);
 
-  // ---------- UI helpers ----------
-  function setMsg(el, text, type = "info") {
-    if (!el) return;
-    el.textContent = text || "";
-    el.style.display = text ? "block" : "none";
-    el.dataset.type = type; // opcional p/ CSS
+/* =========================
+   UI helpers
+========================= */
+function setMsg(text = "", type = "info") {
+  const el = $("#msg");
+  if (!el) return;
+
+  el.textContent = text || "";
+  el.style.color =
+    type === "error" ? "rgba(255,120,120,.95)" :
+    type === "ok"    ? "rgba(102,242,218,.95)" :
+                       "rgba(255,255,255,.70)";
+}
+
+function setBusy(on) {
+  const btn = $("#btnSalvar");
+  if (btn) {
+    btn.disabled = !!on;
+    btn.textContent = on ? "Salvando..." : "Salvar reserva";
+  }
+}
+
+/* =========================
+   WhatsApp helpers (contrato)
+   DB armazena digits intl sem "+"
+========================= */
+function onlyDigits(v = "") {
+  return String(v).replace(/\D/g, "");
+}
+
+function normalizeWhatsappIntl(raw) {
+  const d = onlyDigits(raw);
+  if (!d) return "";
+  if (d.startsWith("55")) return d;
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  return d;
+}
+
+/* =========================
+   Date helpers (DD/MM/YYYY -> YYYY-MM-DD)
+========================= */
+function isValidISODate(iso) {
+  // espera YYYY-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const [y, m, d] = iso.split("-").map(n => parseInt(n, 10));
+  if (m < 1 || m > 12) return false;
+  if (d < 1 || d > 31) return false;
+  // checagem real (Date)
+  const dt = new Date(`${iso}T00:00:00`);
+  return dt.getFullYear() === y && (dt.getMonth() + 1) === m && dt.getDate() === d;
+}
+
+function brToISO(br) {
+  const s = String(br || "").trim();
+  if (!s) return "";
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return "";
+  const dd = m[1], mm = m[2], yyyy = m[3];
+  const iso = `${yyyy}-${mm}-${dd}`;
+  return isValidISODate(iso) ? iso : "";
+}
+
+function isoToBR(iso) {
+  const s = String(iso || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return "";
+  const [y, m, d] = s.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/* =========================
+   Input mask (DD/MM/AAAA)
+========================= */
+function maskBRDateInput(el) {
+  if (!el) return;
+  el.addEventListener("input", () => {
+    const d = onlyDigits(el.value).slice(0, 8);
+    let out = "";
+    if (d.length >= 1) out = d.slice(0, 2);
+    if (d.length >= 3) out = `${d.slice(0, 2)}/${d.slice(2, 4)}`;
+    if (d.length >= 5) out = `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4, 8)}`;
+    el.value = out;
+  });
+}
+
+/* =========================
+   Rooms
+========================= */
+async function loadQuartos(userId) {
+  const sel = $("#quartoId");
+  if (!sel) return;
+
+  sel.innerHTML = `<option value="">(sem quarto)</option>`;
+
+  const { data, error } = await supabase
+    .from("agenda_quartos")
+    .select("id,codigo,nome,tipo,capacidade,ordem,ativo")
+    .eq("user_id", userId)
+    .eq("ativo", true)
+    .order("ordem", { ascending: true })
+    .order("codigo", { ascending: true });
+
+  if (error) {
+    console.error("[reserva-nova] loadQuartos error:", error);
+    setMsg("Não consegui carregar os quartos. Confira RLS/tabela.", "error");
+    return;
   }
 
-  function lockSubmit(form, locked) {
-    if (!form) return;
-    const btn = form.querySelector('button[type="submit"]');
-    if (!btn) return;
-    btn.disabled = !!locked;
-    btn.dataset.loading = locked ? "1" : "0";
-  }
+  (data || []).forEach((q) => {
+    const opt = document.createElement("option");
+    opt.value = q.id;
+    const cap = q.capacidade ? ` • cap ${q.capacidade}` : "";
+    opt.textContent = `${q.codigo} • ${q.nome}${cap}`;
+    sel.appendChild(opt);
+  });
+}
 
-  function normalizeText(v) {
-    return String(v || "").trim().replace(/\s+/g, " ");
-  }
+/* =========================
+   Form actions
+========================= */
+function clearForm() {
+  $("#nome") && ($("#nome").value = "");
+  $("#whatsapp") && ($("#whatsapp").value = "");
+  $("#checkin") && ($("#checkin").value = "");
+  $("#checkout") && ($("#checkout").value = "");
+  $("#obs") && ($("#obs").value = "");
+  $("#quartoId") && ($("#quartoId").value = "");
+  setMsg("");
+}
 
-  // ---------- Data (BR) -> ISO ----------
-  function maskDateInput(el) {
-    if (!el) return;
-    el.addEventListener("input", () => {
-      // aceita só números, aplica DD/MM/AAAA
-      let v = el.value.replace(/\D/g, "").slice(0, 8);
+function getFormPayload(userId) {
+  const nome_hospede = ($("#nome")?.value || "").trim();
+  const whatsappRaw = ($("#whatsapp")?.value || "").trim();
+  const checkinBR = ($("#checkin")?.value || "").trim();
+  const checkoutBR = ($("#checkout")?.value || "").trim();
+  const observacoes = ($("#obs")?.value || "").trim();
+  const quarto_id = ($("#quartoId")?.value || "").trim() || null;
 
-      if (v.length >= 5) el.value = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
-      else if (v.length >= 3) el.value = `${v.slice(0, 2)}/${v.slice(2)}`;
-      else el.value = v;
-    });
+  const checkin = brToISO(checkinBR);
+  const checkout = brToISO(checkoutBR);
+  const whatsapp = normalizeWhatsappIntl(whatsappRaw) || null;
 
-    // melhora UX: se colar "01/02/2026" ou "01022026", mantém ok
-    el.addEventListener("paste", () => {
-      setTimeout(() => {
-        let v = el.value.replace(/\D/g, "").slice(0, 8);
-        if (v.length >= 5) el.value = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
-        else if (v.length >= 3) el.value = `${v.slice(0, 2)}/${v.slice(2)}`;
-        else el.value = v;
-      }, 0);
-    });
-  }
+  // validações
+  if (!nome_hospede) throw new Error("Informe o nome do hóspede.");
+  if (!checkin) throw new Error("Check-in inválido. Use DD/MM/AAAA.");
+  if (!checkout) throw new Error("Check-out inválido. Use DD/MM/AAAA.");
+  if (checkout <= checkin) throw new Error("Check-out precisa ser maior que o check-in.");
 
-  function brDateToISO(v) {
-    const s = normalizeText(v);
-    const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!m) return "";
-    const dd = m[1], mm = m[2], yyyy = m[3];
-    return `${yyyy}-${mm}-${dd}`;
-  }
+  return {
+    user_id: userId,
+    nome_hospede,
+    whatsapp,
+    checkin,
+    checkout,
+    observacoes: observacoes || null,
+    quarto_id, // 👈 vínculo com quarto (se existir no schema)
+  };
+}
 
-  function isISODate(v) {
-    return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
-  }
+async function insertReserva(payload) {
+  // tenta inserir com quarto_id (se a coluna existir)
+  const { data, error } = await supabase
+    .from("agenda_reservas")
+    .insert(payload)
+    .select("id")
+    .single();
 
-  function compareISO(a, b) {
-    if (a === b) return 0;
-    return a < b ? -1 : 1;
-  }
+  if (!error) return data?.id;
 
-  // valida datas reais (ex: 31/02 deve falhar)
-  function isValidISOCalendarDate(iso) {
-    if (!isISODate(iso)) return false;
-    const [y, m, d] = iso.split("-").map(Number);
-    const dt = new Date(y, m - 1, d);
-    return (
-      dt.getFullYear() === y &&
-      dt.getMonth() === m - 1 &&
-      dt.getDate() === d
-    );
-  }
+  // fallback: se ainda NÃO criou a coluna quarto_id no banco, a insert vai falhar
+  // com “column agenda_reservas.quarto_id does not exist”
+  const msg = String(error?.message || "");
+  const isMissingColumn = msg.toLowerCase().includes("quarto_id") && msg.toLowerCase().includes("does not exist");
+  if (!isMissingColumn) throw error;
 
-  // ---------- WhatsApp ----------
-  function maskWhatsappInput(el) {
-    if (!el) return;
-    el.addEventListener("input", () => {
-      // aceita até 11 dígitos (DDD + número BR)
-      let v = el.value.replace(/\D/g, "").slice(0, 11);
+  // reenvia sem quarto_id
+  const { quarto_id, ...payloadNoRoom } = payload;
+  const { data: d2, error: e2 } = await supabase
+    .from("agenda_reservas")
+    .insert(payloadNoRoom)
+    .select("id")
+    .single();
 
-      if (v.length >= 7) el.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
-      else if (v.length >= 3) el.value = `(${v.slice(0, 2)}) ${v.slice(2)}`;
-      else el.value = v;
-    });
+  if (e2) throw e2;
+  return d2?.id;
+}
 
-    el.addEventListener("paste", () => {
-      setTimeout(() => {
-        let v = el.value.replace(/\D/g, "").slice(0, 11);
-        if (v.length >= 7) el.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
-        else if (v.length >= 3) el.value = `(${v.slice(0, 2)}) ${v.slice(2)}`;
-        else el.value = v;
-      }, 0);
-    });
-  }
+/* =========================
+   Boot
+========================= */
+(async function boot() {
+  const user = await requireAuth({
+    redirectTo: "/entrar.html?next=/reserva-nova.html",
+    renderUserInfo: false,
+  });
+  if (!user) return;
 
-  // retorna 5511.... (sem +)
-  function normalizeWhatsappTo55(raw) {
-    const digits = String(raw || "").replace(/\D/g, "");
-    if (!digits) return "";
+  // máscaras de data
+  maskBRDateInput($("#checkin"));
+  maskBRDateInput($("#checkout"));
 
-    // se já vier com 55
-    if (digits.startsWith("55")) return digits;
-
-    // se vier com DDD + número (10 ou 11 dígitos)
-    if (digits.length === 10 || digits.length === 11) return "55" + digits;
-
-    return digits; // cai na validação
-  }
-
-  function validateWhatsapp55(w) {
-    // Esperado: 55 + DDD(2) + número(8 ou 9) => 12 ou 13 dígitos
-    if (!/^\d+$/.test(w)) return false;
-    if (!w.startsWith("55")) return false;
-    if (!(w.length === 12 || w.length === 13)) return false;
-
-    const ddd = w.slice(2, 4);
-    if (ddd === "00") return false;
-
-    return true;
-  }
-
-  // ---------- Main ----------
-  const form = $("#formReserva") || document.querySelector("form");
-  if (!form) return;
-
-  // IDs reais do seu HTML
-  const elNome = $("#nome", form);
-  const elWhats = $("#whatsapp", form);
-  const elCheckin = $("#checkin", form);
-  const elCheckout = $("#checkout", form);
-  const elObs = $("#obs", form);
-  const elMsg = $("#msg") || $(".form-msg");
-  const btnLimpar = $("#btnLimpar");
-
-  // ativa máscaras
-  maskDateInput(elCheckin);
-  maskDateInput(elCheckout);
-  maskWhatsappInput(elWhats);
+  // carrega quartos
+  await loadQuartos(user.id);
 
   // limpar
-  if (btnLimpar) {
-    btnLimpar.addEventListener("click", () => {
-      if (elNome) elNome.value = "";
-      if (elWhats) elWhats.value = "";
-      if (elCheckin) elCheckin.value = "";
-      if (elCheckout) elCheckout.value = "";
-      if (elObs) elObs.value = "";
-      setMsg(elMsg, "");
-      elNome?.focus?.();
-    });
-  }
+  $("#btnLimpar")?.addEventListener("click", () => clearForm());
 
-  form.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    setMsg(elMsg, "");
-
-    // Coleta (BR)
-    const nome_hospede = normalizeText(elNome?.value);
-    const checkinISO = brDateToISO(elCheckin?.value);
-    const checkoutISO = brDateToISO(elCheckout?.value);
-    const observacoes = normalizeText(elObs?.value);
-
-    const whatsapp55 = normalizeWhatsappTo55(elWhats?.value);
-
-    // Validação
-    const errors = [];
-
-    if (!nome_hospede || nome_hospede.length < 2) {
-      errors.push("Informe o nome do hóspede.");
-    }
-
-    if (!checkinISO || !isValidISOCalendarDate(checkinISO)) {
-      errors.push("Informe a data de chegada (check-in) no formato DD/MM/AAAA.");
-    }
-
-    if (!checkoutISO || !isValidISOCalendarDate(checkoutISO)) {
-      errors.push("Informe a data de saída (check-out) no formato DD/MM/AAAA.");
-    }
-
-    if (isISODate(checkinISO) && isISODate(checkoutISO)) {
-      if (compareISO(checkoutISO, checkinISO) < 0) {
-        errors.push("A data de saída não pode ser antes da chegada.");
-      }
-    }
-
-    if (!whatsapp55) {
-      errors.push("Informe o WhatsApp do hóspede.");
-    } else if (!validateWhatsapp55(whatsapp55)) {
-      errors.push("WhatsApp inválido. Digite DDD + número (ex.: 11999998888).");
-    }
-
-    if (errors.length) {
-      setMsg(elMsg, errors.join(" "), "error");
-      return;
-    }
-
-    lockSubmit(form, true);
-    setMsg(elMsg, "Salvando reserva…", "info");
+  // submit
+  $("#formReserva")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
 
     try {
-      // user_id (contrato + segurança)
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
-      if (authErr) throw authErr;
+      setBusy(true);
+      setMsg("Validando…", "info");
 
-      const user_id = authData?.user?.id;
-      if (!user_id) throw new Error("Sessão expirada. Faça login novamente.");
+      const payload = getFormPayload(user.id);
 
-      const payload = {
-        user_id,
-        nome_hospede,
-        whatsapp: whatsapp55,  // 5511...
-        checkin: checkinISO,   // YYYY-MM-DD
-        checkout: checkoutISO, // YYYY-MM-DD
-        observacoes: observacoes || null,
-      };
+      setMsg("Salvando…", "info");
+      const id = await insertReserva(payload);
 
-      // Insert e retorna id
-      const { data, error } = await supabase
-        .from("agenda_reservas")
-        .insert(payload)
-        .select("id")
-        .single();
+      setMsg("Reserva criada ✅", "ok");
 
-      if (error) throw error;
-
-      setMsg(elMsg, "Reserva criada com sucesso ✅", "success");
-
-      const newId = data?.id;
-      if (newId) {
-        window.location.href = `/reserva.html?id=${encodeURIComponent(newId)}`;
-      } else {
-        window.location.href = `/reservas.html`;
-      }
+      // abre a reserva (tela de edição/detalhe)
+      window.location.href = `/reserva.html?id=${encodeURIComponent(id)}`;
     } catch (err) {
-      console.error("reserva-nova insert error:", err);
-
-      const msg =
-        err?.message ||
-        err?.error_description ||
-        "Não foi possível salvar. Tente novamente.";
-
-      setMsg(elMsg, msg, "error");
-      lockSubmit(form, false);
+      console.error("[reserva-nova] submit error:", err);
+      setMsg(err?.message || "Erro ao salvar. Veja o Console (F12).", "error");
+    } finally {
+      setBusy(false);
     }
   });
+
+  // prefill (opcional): se vier ?checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&quarto=uuid
+  try {
+    const url = new URL(window.location.href);
+    const ci = url.searchParams.get("checkin");
+    const co = url.searchParams.get("checkout");
+    const q = url.searchParams.get("quarto");
+    if (ci && isValidISODate(ci) && $("#checkin")) $("#checkin").value = isoToBR(ci);
+    if (co && isValidISODate(co) && $("#checkout")) $("#checkout").value = isoToBR(co);
+    if (q && $("#quartoId")) $("#quartoId").value = q;
+  } catch {}
 })();
