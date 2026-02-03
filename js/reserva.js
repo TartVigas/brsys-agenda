@@ -1,4 +1,4 @@
-// /js/reserva.js
+// /js/reserva.js — V2 (PMS status + ocupação via check-in)
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
@@ -22,17 +22,23 @@ function onlyDigits(s = "") {
   return String(s).replace(/\D/g, "");
 }
 
+function isoTodayLocal() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 /* =========================
    WhatsApp (Round 2A)
-   - DB: 5511...
-   - UI: (11) 99999-9999
 ========================= */
 function normalizeWhatsappTo55(raw) {
   const d = onlyDigits(raw);
   if (!d) return "";
   if (d.startsWith("55")) return d;
   if (d.length === 10 || d.length === 11) return "55" + d;
-  return d; // cai na validação
+  return d;
 }
 
 function validateWhatsapp55(w) {
@@ -53,7 +59,6 @@ function formatWhatsappBRFrom55(v) {
   const ddd = br.slice(0, 2);
   const num = br.slice(2);
 
-  // celular 9 dígitos -> 5-4, fixo 8 dígitos -> 4-4
   if (num.length === 9) return `(${ddd}) ${num.slice(0, 5)}-${num.slice(5)}`;
   return `(${ddd}) ${num.slice(0, 4)}-${num.slice(4)}`;
 }
@@ -63,11 +68,7 @@ function maskWhatsappBR(el) {
 
   const apply = () => {
     let v = onlyDigits(el.value);
-
-    // Se user colou 55..., remove 55 para exibição
     if (v.startsWith("55")) v = v.slice(2);
-
-    // limita a DDD + número (11 máx)
     v = v.slice(0, 11);
 
     if (v.length >= 7) el.value = `(${v.slice(0, 2)}) ${v.slice(2, 7)}-${v.slice(7)}`;
@@ -94,7 +95,17 @@ function setMsg(text = "", type = "info") {
   const el = document.getElementById("msg");
   if (!el) return;
   el.textContent = text || "";
+  el.style.color =
+    type === "error" ? "rgba(255,120,120,.95)" :
+    type === "ok"    ? "rgba(102,242,218,.95)" :
+                       "rgba(255,255,255,.70)";
+}
 
+function setPmsMsg(text = "", type = "info") {
+  const el = document.getElementById("pmsMsg");
+  if (!el) return;
+  el.textContent = text || "";
+  el.style.display = text ? "block" : "none";
   el.style.color =
     type === "error" ? "rgba(255,120,120,.95)" :
     type === "ok"    ? "rgba(102,242,218,.95)" :
@@ -119,31 +130,115 @@ function disableSave(disabled) {
 }
 
 function isoNowBR() {
-  const d = new Date();
-  return d.toLocaleString("pt-BR");
+  return new Date().toLocaleString("pt-BR");
 }
 
 /* =========================
-   Field mapping (V1)
-   (contrato oficial)
+   PMS Status (V2)
+========================= */
+const STATUS = {
+  reservado: "reservado",
+  hospedado: "hospedado",
+  finalizado: "finalizado",
+  cancelado: "cancelado",
+};
+
+function normalizeStatus(s) {
+  const v = String(s || "").toLowerCase().trim();
+  if (v === STATUS.hospedado) return STATUS.hospedado;
+  if (v === STATUS.finalizado) return STATUS.finalizado;
+  if (v === STATUS.cancelado) return STATUS.cancelado;
+  return STATUS.reservado; // default seguro
+}
+
+function statusLabel(s) {
+  const v = normalizeStatus(s);
+  if (v === STATUS.hospedado) return "Hospedado";
+  if (v === STATUS.finalizado) return "Finalizado";
+  if (v === STATUS.cancelado) return "Cancelado";
+  return "Reservado";
+}
+
+function statusPillTone(s) {
+  // só inline style simples pra não mexer no CSS agora
+  const v = normalizeStatus(s);
+  if (v === STATUS.hospedado) return "rgba(255,210,120,.95)"; // warn
+  if (v === STATUS.finalizado) return "rgba(102,242,218,.95)"; // ok
+  if (v === STATUS.cancelado) return "rgba(255,120,120,.95)"; // error
+  return "rgba(255,255,255,.70)"; // neutro
+}
+
+function renderStatusUI(model) {
+  const pill = document.getElementById("resStatusPill");
+  const hint = document.getElementById("resStatusHint");
+
+  const btnCheckin = document.getElementById("btnCheckin");
+  const btnCheckout = document.getElementById("btnCheckout");
+  const btnCancelar = document.getElementById("btnCancelar");
+
+  const st = normalizeStatus(model?.status);
+
+  if (pill) {
+    pill.textContent = statusLabel(st);
+    pill.style.borderColor = "rgba(255,255,255,.12)";
+    pill.style.color = statusPillTone(st);
+  }
+
+  // Hints rápidos (pra evitar confusão do “ocupa hoje”)
+  if (hint) {
+    const today = isoTodayLocal();
+    const isToday = model?.checkin === today;
+
+    let t = "";
+    if (st === STATUS.reservado) {
+      t = isToday
+        ? "Não ocupa ainda. Só ocupa após Check-in."
+        : "Reserva criada. Só ocupa após Check-in.";
+    } else if (st === STATUS.hospedado) {
+      t = "Ocupando quarto agora (Check-in feito).";
+    } else if (st === STATUS.finalizado) {
+      t = "Reserva finalizada (Checkout).";
+    } else if (st === STATUS.cancelado) {
+      t = "Reserva cancelada.";
+    }
+
+    hint.textContent = t;
+    hint.style.display = t ? "inline" : "none";
+  }
+
+  // Botões PMS por status
+  const show = (el, on) => { if (el) el.style.display = on ? "" : "none"; };
+
+  show(btnCheckin, st === STATUS.reservado);
+  show(btnCancelar, st === STATUS.reservado);
+
+  show(btnCheckout, st === STATUS.hospedado);
+
+  // Mensagem PMS limpa
+  setPmsMsg("");
+}
+
+/* =========================
+   Field mapping (V2)
 ========================= */
 function toFormModel(row) {
-  // IMPORTANTE: model.whatsapp deve manter o formato do DB (55...)
   return {
     nome: row?.nome_hospede ?? "",
-    whatsapp: row?.whatsapp ?? "", // 55...
+    whatsapp: row?.whatsapp ?? "",
     checkin: row?.checkin ?? "",
     checkout: row?.checkout ?? "",
     obs: row?.observacoes ?? "",
+    status: normalizeStatus(row?.status),     // ✅ novo
+    quarto_id: row?.quarto_id ?? null,        // ✅ útil pro mapa
     created_at: row?.created_at ?? null,
     updated_at: row?.updated_at ?? null,
   };
 }
 
 function toDbPayload(model) {
-  // model.whatsapp aqui pode estar “bonito”, então normaliza p/ 55...
   const whatsapp55 = normalizeWhatsappTo55(model.whatsapp);
 
+  // status nunca vem daqui (status é PMS controlado por botões)
   return {
     nome_hospede: model.nome || null,
     whatsapp: whatsapp55 || null,
@@ -155,23 +250,13 @@ function toDbPayload(model) {
 }
 
 /* =========================
-   Validation
+   Validation (V1 mantém)
 ========================= */
 function validate(model) {
-  if (!model.nome || model.nome.trim().length < 2) {
-    return "Informe o nome do hóspede.";
-  }
+  if (!model.nome || model.nome.trim().length < 2) return "Informe o nome do hóspede.";
+  if (!model.checkin || !model.checkout) return "Informe check-in e check-out.";
+  if (model.checkout <= model.checkin) return "Check-out precisa ser depois do check-in.";
 
-  if (!model.checkin || !model.checkout) {
-    return "Informe check-in e check-out.";
-  }
-
-  // date inputs são YYYY-MM-DD
-  if (model.checkout <= model.checkin) {
-    return "Check-out precisa ser depois do check-in.";
-  }
-
-  // WhatsApp (Round 2A): obrigatório e válido
   const w55 = normalizeWhatsappTo55(model.whatsapp);
   if (!w55) return "Informe o WhatsApp do hóspede.";
   if (!validateWhatsapp55(w55)) return "WhatsApp inválido. Use DDD + número (ex.: 11999998888).";
@@ -190,26 +275,30 @@ const checkoutEl = document.getElementById("checkout");
 const obsEl = document.getElementById("obs");
 
 const metaEl = document.getElementById("meta");
-const btnSalvar = document.getElementById("btnSalvar");
 const btnExcluir = document.getElementById("btnExcluir");
 const btnWhats = document.getElementById("btnWhats");
+
+const btnCheckin = document.getElementById("btnCheckin");
+const btnCheckout = document.getElementById("btnCheckout");
+const btnCancelar = document.getElementById("btnCancelar");
 
 /* =========================
    State
 ========================= */
 let USER = null;
 let RESERVA_ID = null;
-let original = null; // snapshot do DB (whatsapp em 55...)
+let original = null; // snapshot do DB
 let saving = false;
 let deleting = false;
+let changingStatus = false;
 
 /* =========================
-   Dirty tracking (edição inline)
+   Dirty tracking
 ========================= */
 function readModelFromForm() {
   return {
     nome: (nomeEl?.value || "").trim(),
-    whatsapp: (whatsEl?.value || "").trim(), // pode estar bonito
+    whatsapp: (whatsEl?.value || "").trim(),
     checkin: (checkinEl?.value || "").trim(),
     checkout: (checkoutEl?.value || "").trim(),
     obs: (obsEl?.value || "").trim(),
@@ -220,7 +309,6 @@ function isDirty() {
   if (!original) return false;
   const cur = readModelFromForm();
 
-  // compara whatsapp normalizado para 55... dos dois lados
   const curW = normalizeWhatsappTo55(cur.whatsapp);
   const origW = normalizeWhatsappTo55(original.whatsapp);
 
@@ -233,6 +321,23 @@ function isDirty() {
   );
 }
 
+function refreshWhatsButton(model) {
+  if (!btnWhats) return;
+
+  const name = (model?.nome || "Olá").trim() || "Olá";
+  const w55 = normalizeWhatsappTo55(model?.whatsapp || "");
+  const link = toWaLinkFrom55(w55, `Olá ${name}! Aqui é da recepção 🙂`);
+
+  if (!link) {
+    btnWhats.style.display = "none";
+    btnWhats.href = "#";
+    return;
+  }
+
+  btnWhats.style.display = "";
+  btnWhats.href = link;
+}
+
 function refreshSaveState() {
   const cur = readModelFromForm();
   const err = validate(cur);
@@ -240,7 +345,7 @@ function refreshSaveState() {
   if (err) {
     disableSave(true);
     setMsg(err, "error");
-    refreshWhatsButton(cur); // botão acompanha mesmo com erro
+    refreshWhatsButton(cur);
     return;
   }
 
@@ -266,27 +371,6 @@ function bindDirtyListeners() {
 }
 
 /* =========================
-   WhatsApp button (Round 2A)
-========================= */
-function refreshWhatsButton(model) {
-  if (!btnWhats) return;
-
-  const name = (model?.nome || "Olá").trim() || "Olá";
-  const w55 = normalizeWhatsappTo55(model?.whatsapp || "");
-
-  const link = toWaLinkFrom55(w55, `Olá ${name}! Aqui é da recepção 🙂`);
-
-  if (!link) {
-    btnWhats.style.display = "none";
-    btnWhats.href = "#";
-    return;
-  }
-
-  btnWhats.style.display = "";
-  btnWhats.href = link;
-}
-
-/* =========================
    Load
 ========================= */
 async function loadReserva() {
@@ -298,6 +382,7 @@ async function loadReserva() {
 
   showState("loading");
   setMsg("");
+  setPmsMsg("");
 
   const { data, error } = await supabase
     .from("agenda_reservas")
@@ -306,24 +391,17 @@ async function loadReserva() {
     .eq("user_id", USER.id)
     .maybeSingle();
 
-  if (error) {
+  if (error || !data) {
     console.error("[reserva] load error:", error);
     showState("notfound");
     return;
   }
 
-  if (!data) {
-    showState("notfound");
-    return;
-  }
-
-  // snapshot (DB)
   original = toFormModel(data);
 
   // fill form
   if (nomeEl) nomeEl.value = original.nome || "";
 
-  // WhatsApp: exibe bonito, mas mantém original.whatsapp em 55...
   if (whatsEl) {
     whatsEl.value = formatWhatsappBRFrom55(original.whatsapp);
     maskWhatsappBR(whatsEl);
@@ -347,10 +425,8 @@ async function loadReserva() {
     `;
   }
 
-  refreshWhatsButton({
-    ...original,
-    whatsapp: original.whatsapp // 55...
-  });
+  refreshWhatsButton({ ...original, whatsapp: original.whatsapp });
+  renderStatusUI(original);
 
   showState("form");
   bindDirtyListeners();
@@ -358,10 +434,10 @@ async function loadReserva() {
 }
 
 /* =========================
-   Save (update)
+   Save (update fields)
 ========================= */
 async function saveReserva() {
-  if (saving) return;
+  if (saving || changingStatus) return;
   saving = true;
 
   const cur = readModelFromForm();
@@ -401,16 +477,12 @@ async function saveReserva() {
     return;
   }
 
-  // atualiza snapshot + tela
   original = toFormModel(data);
 
-  // re-render Whats bonito após salvar (garante consistência)
   if (whatsEl) whatsEl.value = formatWhatsappBRFrom55(original.whatsapp);
 
-  refreshWhatsButton({
-    ...original,
-    whatsapp: original.whatsapp
-  });
+  refreshWhatsButton({ ...original, whatsapp: original.whatsapp });
+  renderStatusUI(original);
 
   if (metaEl) {
     const created = original.created_at ? new Date(original.created_at).toLocaleString("pt-BR") : "—";
@@ -430,10 +502,93 @@ async function saveReserva() {
 }
 
 /* =========================
+   PMS: update status
+========================= */
+async function updateStatus(nextStatus) {
+  if (changingStatus) return;
+  changingStatus = true;
+
+  const cur = readModelFromForm();
+  const name = (cur?.nome || original?.nome || "hóspede").trim();
+
+  // Regras mínimas de segurança:
+  const st = normalizeStatus(original?.status);
+  const today = isoTodayLocal();
+
+  if (nextStatus === STATUS.hospedado) {
+    // check-in só faz sentido se hoje >= checkin
+    if (today < original.checkin) {
+      setPmsMsg("Ainda não chegou a data do check-in.", "error");
+      changingStatus = false;
+      return;
+    }
+    if (st !== STATUS.reservado) {
+      setPmsMsg("Check-in só é permitido quando a reserva está como Reservado.", "error");
+      changingStatus = false;
+      return;
+    }
+  }
+
+  if (nextStatus === STATUS.finalizado) {
+    if (st !== STATUS.hospedado) {
+      setPmsMsg("Checkout só é permitido quando está Hospedado.", "error");
+      changingStatus = false;
+      return;
+    }
+    // opcional: impedir checkout antes da data
+    // (mantive livre, porque motel/hotel pode sair antes)
+  }
+
+  if (nextStatus === STATUS.cancelado) {
+    if (st !== STATUS.reservado) {
+      setPmsMsg("Cancelar só é permitido quando está Reservado.", "error");
+      changingStatus = false;
+      return;
+    }
+  }
+
+  // Confirmação humana
+  let msgConfirm = "";
+  if (nextStatus === STATUS.hospedado) msgConfirm = `Confirmar CHECK-IN de "${name}"?`;
+  if (nextStatus === STATUS.finalizado) msgConfirm = `Confirmar CHECKOUT de "${name}"?`;
+  if (nextStatus === STATUS.cancelado) msgConfirm = `Cancelar a reserva de "${name}"?`;
+
+  if (msgConfirm && !window.confirm(msgConfirm)) {
+    changingStatus = false;
+    return;
+  }
+
+  setPmsMsg("Atualizando status…", "info");
+
+  const { data, error } = await supabase
+    .from("agenda_reservas")
+    .update({ status: nextStatus, updated_at: new Date().toISOString() })
+    .eq("id", RESERVA_ID)
+    .eq("user_id", USER.id)
+    .select("*")
+    .single();
+
+  changingStatus = false;
+
+  if (error) {
+    console.error("[reserva] status update error:", error);
+    setPmsMsg("Erro ao atualizar status. Confira se a coluna status existe e RLS permite update.", "error");
+    return;
+  }
+
+  original = toFormModel(data);
+  renderStatusUI(original);
+  setPmsMsg(`Status atualizado: ${statusLabel(original.status)} ✅`, "ok");
+
+  // atualiza estado do salvar (pra não ficar “dirty” por nada)
+  refreshSaveState();
+}
+
+/* =========================
    Delete
 ========================= */
 async function deleteReserva() {
-  if (deleting) return;
+  if (deleting || changingStatus) return;
   deleting = true;
 
   const name = (nomeEl?.value || "esta reserva").trim();
@@ -462,9 +617,7 @@ async function deleteReserva() {
   }
 
   setMsg("Reserva excluída ✅ Redirecionando…", "ok");
-  setTimeout(() => {
-    window.location.replace("/reservas.html");
-  }, 600);
+  setTimeout(() => window.location.replace("/reservas.html"), 600);
 }
 
 /* =========================
@@ -478,6 +631,11 @@ form?.addEventListener("submit", async (e) => {
 btnExcluir?.addEventListener("click", async () => {
   await deleteReserva();
 });
+
+// PMS buttons
+btnCheckin?.addEventListener("click", async () => updateStatus(STATUS.hospedado));
+btnCheckout?.addEventListener("click", async () => updateStatus(STATUS.finalizado));
+btnCancelar?.addEventListener("click", async () => updateStatus(STATUS.cancelado));
 
 /* =========================
    Boot
