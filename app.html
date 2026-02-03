@@ -52,6 +52,7 @@
         Resumo rápido do dia e atalhos para trabalhar sem enrolação.
       </p>
 
+      <!-- KPIs (agora PMS) -->
       <div class="grid-3" id="kpis" style="margin-top:14px;">
         <div class="mini-card">
           <div class="muted small">Check-ins hoje</div>
@@ -62,8 +63,23 @@
           <div class="kpi" id="kpiCheckout">—</div>
         </div>
         <div class="mini-card">
+          <div class="muted small">Hospedados agora</div>
+          <div class="kpi" id="kpiHospedados">—</div>
+        </div>
+      </div>
+
+      <div class="grid-3" style="margin-top:10px;">
+        <div class="mini-card">
           <div class="muted small">Reservas futuras</div>
           <div class="kpi" id="kpiFuturas">—</div>
+        </div>
+        <div class="mini-card">
+          <div class="muted small">Data</div>
+          <div class="kpi" id="kpiHojeLabel" style="font-size:18px;">—</div>
+        </div>
+        <div class="mini-card">
+          <div class="muted small">Operação</div>
+          <div class="kpi" id="kpiOperacao" style="font-size:18px;">—</div>
         </div>
       </div>
 
@@ -72,6 +88,64 @@
         <a class="btn outline" href="/hoje.html">Hoje</a>
         <a class="btn outline" href="/hospedes.html">Hóspedes</a>
         <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">Suporte WhatsApp</a>
+      </div>
+    </section>
+
+    <!-- Operação de Hoje (PMS real) -->
+    <section class="card" style="margin-top:14px;">
+      <div class="row" style="align-items:center;justify-content:space-between;">
+        <h2 class="h2" style="margin:0;">Operação de hoje</h2>
+        <a class="muted small" href="/hoje.html">Abrir tela Hoje →</a>
+      </div>
+
+      <div id="opsLoading" style="margin-top:10px;">
+        <p class="muted">Carregando operação…</p>
+        <div class="skeleton">
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+        </div>
+      </div>
+
+      <div id="opsMsg" class="muted small" style="margin-top:10px;display:none;"></div>
+
+      <div class="grid-2" style="margin-top:12px;">
+        <div class="mini-card" style="min-height:140px;">
+          <div class="row" style="align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-weight:800;">Chegadas hoje</div>
+              <div class="muted small">check-in = hoje</div>
+            </div>
+            <div class="kpi" id="countChegadas" style="font-size:20px;">—</div>
+          </div>
+          <div id="listChegadas" class="list" style="margin-top:10px;"></div>
+          <div id="emptyChegadas" class="muted small" style="display:none;margin-top:10px;">Nenhuma chegada hoje.</div>
+        </div>
+
+        <div class="mini-card" style="min-height:140px;">
+          <div class="row" style="align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-weight:800;">Saídas hoje</div>
+              <div class="muted small">check-out = hoje</div>
+            </div>
+            <div class="kpi" id="countSaidas" style="font-size:20px;">—</div>
+          </div>
+          <div id="listSaidas" class="list" style="margin-top:10px;"></div>
+          <div id="emptySaidas" class="muted small" style="display:none;margin-top:10px;">Nenhuma saída hoje.</div>
+        </div>
+      </div>
+
+      <div class="mini-card" style="margin-top:12px;">
+        <div class="row" style="align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-weight:800;">Hospedados agora</div>
+            <div class="muted small">check-in ≤ hoje e check-out &gt; hoje</div>
+          </div>
+          <div class="kpi" id="countHospedados" style="font-size:20px;">—</div>
+        </div>
+
+        <div id="listHospedados" class="list" style="margin-top:10px;"></div>
+        <div id="emptyHospedados" class="muted small" style="display:none;margin-top:10px;">Nenhum hóspede hospedado agora.</div>
       </div>
     </section>
 
