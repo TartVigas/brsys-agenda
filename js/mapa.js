@@ -1,337 +1,364 @@
+// /js/mapa.js — Mapa de Quartos (V1)
+// Fonte: view public.agenda_quartos_mapa
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
-const $ = (s) => document.querySelector(s);
-const $$ = (s) => Array.from(document.querySelectorAll(s));
+(function () {
+  const $ = (sel, root = document) => root.querySelector(sel);
 
-const elLoading = $("#stateLoading");
-const elEmpty = $("#stateEmpty");
-const elGridWrap = $("#stateGrid");
-const elGrid = $("#grid");
-const elSummary = $("#summary");
-const elMsg = $("#msg");
-const elQ = $("#q");
+  const elToday = $("#todayLabel");
+  const elMsg = $("#msg");
+  const elLoading = $("#stateLoading");
+  const elEmpty = $("#stateEmpty");
+  const elGrid = $("#grid");
+  const elSearch = $("#qSearch");
+  const elFilter = $("#qFilter");
+  const btnReload = $("#btnReload");
 
-let USER = null;
-let ROOMS = [];
-let RELEVANT = [];
-let VIEW = [];
-let FILTER = "all";
+  let USER = null;
+  let ALL = []; // rows do mapa
 
-function show(which) {
-  if (elLoading) elLoading.style.display = which === "loading" ? "" : "none";
-  if (elEmpty) elEmpty.style.display = which === "empty" ? "" : "none";
-  if (elGridWrap) elGridWrap.style.display = which === "grid" ? "" : "none";
-}
-
-function pad2(n) { return String(n).padStart(2, "0"); }
-
-function todayISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function formatBR(iso) {
-  if (!iso) return "—";
-  const [y, m, d] = String(iso).split("-");
-  if (!y || !m || !d) return String(iso);
-  return `${d}/${m}/${y}`;
-}
-
-function escapeHtml(str) {
-  return String(str ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function onlyDigits(v = "") {
-  return String(v).replace(/\D/g, "");
-}
-
-function normalizeWhatsappIntl(raw) {
-  const d = onlyDigits(raw);
-  if (!d) return "";
-  if (d.startsWith("55")) return d;
-  if (d.length === 10 || d.length === 11) return `55${d}`;
-  return d;
-}
-
-function waLinkFromIntlDigits(intlDigits, text = "") {
-  const w = normalizeWhatsappIntl(intlDigits);
-  if (!w) return "";
-  const qs = text ? `?text=${encodeURIComponent(text)}` : "";
-  return `https://wa.me/${w}${qs}`;
-}
-
-function pill(label, tone = "muted") {
-  const color =
-    tone === "ok" ? "rgba(102,242,218,.95)" :
-    tone === "warn" ? "rgba(255,210,120,.95)" :
-    tone === "bad" ? "rgba(255,120,120,.95)" :
-    "rgba(255,255,255,.70)";
-
-  return `<span class="pill" style="border-color:rgba(255,255,255,.12);color:${color};">${escapeHtml(label)}</span>`;
-}
-
-function roomLabel(r) {
-  const codigo = (r.codigo || "").trim();
-  const nome = (r.nome || "").trim();
-  if (codigo && nome) return `${codigo} • ${nome}`;
-  return codigo || nome || "Quarto";
-}
-
-function roomMeta(r) {
-  const parts = [];
-  if (r.tipo) parts.push(r.tipo);
-  if (r.capacidade != null) parts.push(`Cap: ${r.capacidade}`);
-  return parts.join(" • ") || "—";
-}
-
-function applyUIActiveFilterButtons() {
-  $$("button[data-filter]").forEach((b) => {
-    const v = b.getAttribute("data-filter");
-    if (v === FILTER) {
-      b.classList.remove("outline");
-      if (!b.classList.contains("primary")) b.classList.add("primary");
-    } else {
-      b.classList.remove("primary");
-      if (!b.classList.contains("outline")) b.classList.add("outline");
-    }
-  });
-}
-
-/**
- * Estado PMS do quarto (V1)
- * prioridade:
- * 1) OCUPADO (checkin <= hoje && checkout > hoje)
- * 2) SAI HOJE (checkout == hoje)
- * 3) ENTRA HOJE (checkin == hoje)
- * 4) RESERVADO FUTURO (próximo checkin > hoje)
- * 5) LIVRE
- */
-function buildRoomState(room, today, byRoom) {
-  const list = byRoom.get(room.id) || [];
-
-  const active = list.find(r => r.checkin <= today && r.checkout > today) || null;
-  if (active) {
-    return { key: "occ", label: "Ocupado", tone: "warn", hint: `até ${formatBR(active.checkout)}`, ref: active };
-  }
-
-  const outToday = list.find(r => r.checkout === today) || null;
-  if (outToday) {
-    return { key: "today", label: "Sai hoje", tone: "warn", hint: `checkout ${formatBR(outToday.checkout)}`, ref: outToday };
-  }
-
-  const inToday = list.find(r => r.checkin === today) || null;
-  if (inToday) {
-    return { key: "today", label: "Entra hoje", tone: "ok", hint: `check-in ${formatBR(inToday.checkin)}`, ref: inToday };
-  }
-
-  const next = list
-    .filter(r => r.checkin > today)
-    .sort((a, b) => String(a.checkin).localeCompare(String(b.checkin)))[0] || null;
-
-  if (next) {
-    return { key: "free", label: "Reservado", tone: "muted", hint: `próximo ${formatBR(next.checkin)}`, ref: next };
-  }
-
-  return { key: "free", label: "Livre", tone: "ok", hint: "sem previsão", ref: null };
-}
-
-function buildCard(room, st) {
-  const title = roomLabel(room);
-  const meta = roomMeta(room);
-
-  const ref = st.ref;
-  const guest = ref?.nome_hospede ? String(ref.nome_hospede).trim() : "";
-  const phone = ref?.whatsapp || "";
-  const wpp = phone ? waLinkFromIntlDigits(phone, `Olá ${guest || "tudo bem"}! Aqui é da recepção 🙂`) : "";
-
-  const aOpen = ref?.id ? `/reserva.html?id=${encodeURIComponent(ref.id)}` : "";
-  const aNew = `/reserva-nova.html?quarto_id=${encodeURIComponent(room.id)}`;
-  const aWalk = `/reserva-nova.html?quarto_id=${encodeURIComponent(room.id)}&walkin=1`;
-
-  // walk-in permitido quando livre ou reservado (você pode bloquear reservado se quiser)
-  const canWalkIn = (st.label === "Livre" || st.label === "Reservado");
-  const walkText = st.label === "Reservado" ? "Walk-in (forçar)" : "Walk-in";
-
-  return {
-    room,
-    st,
-    html: `
-      <div class="mini-card" style="display:flex;flex-direction:column;gap:8px;">
-        <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;">
-          <div style="min-width:0;">
-            <div style="font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-              ${escapeHtml(title)}
-            </div>
-            <div class="muted small" style="margin-top:6px;">${escapeHtml(meta)}</div>
-          </div>
-          ${pill(st.label, st.tone)}
-        </div>
-
-        <div class="muted small">
-          <span class="mono">${escapeHtml(st.hint)}</span>
-          ${guest ? ` • <strong>${escapeHtml(guest)}</strong>` : ""}
-        </div>
-
-        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px;">
-          ${aOpen ? `<a class="btn outline small" href="${aOpen}">Abrir</a>` : ""}
-          <a class="btn outline small" href="${aNew}">Nova</a>
-          ${canWalkIn ? `<a class="btn primary small" href="${aWalk}">${escapeHtml(walkText)}</a>` : ""}
-          ${wpp ? `<a class="btn outline small" href="${wpp}" target="_blank" rel="noopener noreferrer">WhatsApp</a>` : ""}
-        </div>
-      </div>
-    `
-  };
-}
-
-function filterView(list) {
-  const q = (elQ?.value || "").trim().toLowerCase();
-  let out = list;
-
-  if (FILTER !== "all") {
-    if (FILTER === "occ") out = out.filter(x => x.st.key === "occ");
-    if (FILTER === "free") out = out.filter(x => x.st.key === "free");
-    if (FILTER === "today") out = out.filter(x => x.st.key === "today" || x.st.key === "occ");
-  }
-
-  if (q) {
-    out = out.filter(x => {
-      const t = `${x.room.codigo || ""} ${x.room.nome || ""} ${x.room.tipo || ""}`.toLowerCase();
-      return t.includes(q);
-    });
-  }
-
-  // ordenação: ocupados -> hoje -> reservado -> livre
-  const w = (x) => {
-    if (x.st.key === "occ") return 0;
-    if (x.st.key === "today") return 1;
-    if (x.st.label === "Reservado") return 2;
-    return 3;
-  };
-
-  return out.slice().sort((a, b) => w(a) - w(b));
-}
-
-function render() {
-  applyUIActiveFilterButtons();
-
-  const out = filterView(VIEW);
-
-  const t = todayISO();
-  const free = VIEW.filter(x => x.st.key === "free").length;
-  const occ = VIEW.filter(x => x.st.key === "occ").length;
-  const todayCount = VIEW.filter(x => x.st.key === "today").length;
-
-  if (elSummary) {
-    elSummary.textContent = `${VIEW.length} quartos • ${occ} ocupados • ${todayCount} hoje • ${free} livres • ${formatBR(t)}`;
-  }
-
-  if (!VIEW.length) {
-    show("empty");
-    return;
-  }
-
-  show("grid");
-  if (elGrid) elGrid.innerHTML = "";
-
-  if (!out.length) {
-    if (elMsg) elMsg.textContent = "Nada encontrado com esse filtro/busca.";
-    return;
-  } else {
-    if (elMsg) elMsg.textContent = "";
-  }
-
-  out.forEach(x => {
-    const wrap = document.createElement("div");
-    wrap.innerHTML = x.html;
-    elGrid.appendChild(wrap.firstElementChild);
-  });
-}
-
-async function load() {
-  show("loading");
-  if (elMsg) elMsg.textContent = "";
-  if (elSummary) elSummary.textContent = "Carregando…";
-
-  USER = await requireAuth({ redirectTo: "/entrar.html?next=/mapa.html", renderUserInfo: false });
-  const today = todayISO();
-
-  // 1) quartos ativos
-  const { data: rooms, error: rErr } = await supabase
-    .from("agenda_quartos")
-    .select("id, user_id, codigo, nome, tipo, capacidade, ordem, ativo")
-    .eq("user_id", USER.id)
-    .eq("ativo", true)
-    .order("ordem", { ascending: true })
-    .order("codigo", { ascending: true });
-
-  if (rErr) {
-    console.error("[mapa] rooms error:", rErr);
-    show("empty");
-    if (elSummary) elSummary.textContent = "Erro ao carregar quartos";
-    return;
-  }
-
-  ROOMS = Array.isArray(rooms) ? rooms : [];
-  if (!ROOMS.length) {
-    show("empty");
-    if (elSummary) elSummary.textContent = "0 quartos";
-    return;
-  }
-
-  // 2) reservas relevantes (ativas/hoje + janela futura)
-  const futureEnd = (() => {
+  // ---------- helpers ----------
+  function isoToday() {
     const d = new Date();
-    d.setDate(d.getDate() + 60);
-    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-  })();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
 
-  const { data: resv, error: eResv } = await supabase
-    .from("agenda_reservas")
-    .select("id, quarto_id, nome_hospede, whatsapp, checkin, checkout")
-    .eq("user_id", USER.id)
-    .not("quarto_id", "is", null)
-    .gte("checkout", today)
-    .lte("checkin", futureEnd)
-    .order("checkin", { ascending: true })
-    .limit(2000);
+  function fmtBR(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "—";
+    return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+  }
 
-  if (eResv) console.warn("[mapa] reservas warning:", eResv);
+  function escapeHtml(str = "") {
+    return String(str)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
 
-  RELEVANT = Array.isArray(resv) ? resv : [];
+  function onlyDigits(v = "") {
+    return String(v).replace(/\D/g, "");
+  }
 
-  // index por quarto
-  const byRoom = new Map();
-  RELEVANT.forEach(r => {
-    if (!r.quarto_id) return;
-    if (!byRoom.has(r.quarto_id)) byRoom.set(r.quarto_id, []);
-    byRoom.get(r.quarto_id).push(r);
-  });
+  // DB guarda 55...
+  function waLink(phone55, text = "") {
+    const d = onlyDigits(phone55);
+    if (!d) return null;
+    const w = d.startsWith("55") ? d : (d.length === 10 || d.length === 11) ? `55${d}` : d;
+    if (!w.startsWith("55")) return null;
+    if (!(w.length === 12 || w.length === 13)) return null;
+    const qs = text ? `?text=${encodeURIComponent(text)}` : "";
+    return `https://wa.me/${w}${qs}`;
+  }
 
-  // 3) monta cards
-  VIEW = ROOMS.map(room => {
-    const st = buildRoomState(room, today, byRoom);
-    return buildCard(room, st);
-  });
+  function setMsg(text = "", type = "info") {
+    if (!elMsg) return;
+    elMsg.textContent = text || "";
+    elMsg.style.color =
+      type === "error" ? "rgba(255,120,120,.95)" :
+      type === "ok" ? "rgba(102,242,218,.95)" :
+      "rgba(255,255,255,.70)";
+  }
 
-  render();
-}
+  function show(el, on = true) {
+    if (!el) return;
+    el.style.display = on ? "" : "none";
+  }
 
-function bind() {
-  $$("button[data-filter]").forEach((b) => {
-    b.addEventListener("click", () => {
-      FILTER = b.getAttribute("data-filter") || "all";
-      render();
+  function statusPill(st) {
+    const map = {
+      livre: { t: "Livre", c: "rgba(102,242,218,.95)" },
+      ocupado: { t: "Ocupado", c: "rgba(255,210,120,.95)" },
+      reservado_hoje: { t: "Entra hoje", c: "rgba(160,200,255,.95)" },
+      reservado_futuro: { t: "Reservado", c: "rgba(255,255,255,.75)" },
+    };
+    const s = map[st] || { t: st || "—", c: "rgba(255,255,255,.75)" };
+    return `<span class="pill" style="border-color:rgba(255,255,255,.12);color:${s.c};">${s.t}</span>`;
+  }
+
+  function roomTitle(r) {
+    const codigo = r.codigo ? escapeHtml(r.codigo) : "";
+    const nome = r.nome ? escapeHtml(r.nome) : "Quarto";
+    if (codigo && nome) return `${codigo} • ${nome}`;
+    return codigo || nome;
+  }
+
+  function roomMeta(r) {
+    const tipo = r.tipo ? escapeHtml(r.tipo) : "—";
+    const cap = r.capacidade ?? "—";
+    return `${tipo} • Cap: ${cap}`;
+  }
+
+  // ---------- ações ----------
+  async function actionCheckin(reservaId) {
+    setMsg("Fazendo check-in…", "info");
+
+    const { error } = await supabase
+      .from("agenda_reservas")
+      .update({ status: "hospedado", updated_at: new Date().toISOString() })
+      .eq("id", reservaId)
+      .eq("user_id", USER.id);
+
+    if (error) {
+      console.error("[mapa] checkin error:", error);
+      setMsg("Erro ao fazer check-in. Verifique RLS.", "error");
+      return;
+    }
+
+    setMsg("Check-in feito ✅", "ok");
+    await load();
+  }
+
+  async function actionCheckout(reservaId) {
+    const ok = confirm("Fechar / Checkout dessa hospedagem?");
+    if (!ok) return;
+
+    setMsg("Fazendo checkout…", "info");
+
+    const { error } = await supabase
+      .from("agenda_reservas")
+      .update({ status: "finalizado", updated_at: new Date().toISOString() })
+      .eq("id", reservaId)
+      .eq("user_id", USER.id);
+
+    if (error) {
+      console.error("[mapa] checkout error:", error);
+      setMsg("Erro ao fazer checkout. Verifique RLS.", "error");
+      return;
+    }
+
+    setMsg("Checkout feito ✅", "ok");
+    await load();
+  }
+
+  // Walk-in: cria reserva já como "hospedado"
+  async function actionWalkin(quartoId) {
+    const nome = prompt("Walk-in: nome do hóspede?");
+    if (!nome) return;
+
+    const wpp = prompt("WhatsApp (opcional, pode colar com DDD):") || "";
+    const today = isoToday();
+
+    // checkout default: amanhã
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const checkout = `${yyyy}-${mm}-${dd}`;
+
+    setMsg("Criando walk-in…", "info");
+
+    const payload = {
+      user_id: USER.id,
+      quarto_id: quartoId,
+      nome_hospede: nome.trim(),
+      whatsapp: onlyDigits(wpp) ? (onlyDigits(wpp).startsWith("55") ? onlyDigits(wpp) : `55${onlyDigits(wpp)}`) : null,
+      checkin: today,
+      checkout,
+      observacoes: "walk-in",
+      status: "hospedado",
+    };
+
+    const { data, error } = await supabase
+      .from("agenda_reservas")
+      .insert(payload)
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[mapa] walkin error:", error);
+      setMsg("Erro ao criar walk-in. Verifique RLS/tabela.", "error");
+      return;
+    }
+
+    setMsg("Walk-in criado ✅", "ok");
+    // abre a reserva para editar/conta
+    window.location.href = `/reserva.html?id=${encodeURIComponent(data.id)}`;
+  }
+
+  // ---------- render ----------
+  function renderCard(r) {
+    const st = r.mapa_status || "—";
+
+    const occName = r.nome_hospede ? escapeHtml(r.nome_hospede) : "";
+    const occOut = r.checkout ? fmtBR(r.checkout) : "—";
+    const occResId = r.reserva_id;
+
+    const nextName = r.next_nome_hospede ? escapeHtml(r.next_nome_hospede) : "";
+    const nextIn = r.next_checkin ? fmtBR(r.next_checkin) : "—";
+    const nextResId = r.next_reserva_id;
+
+    const waOcc = waLink(r.whatsapp, `Olá ${occName || "Olá"}! Aqui é da recepção 🙂`);
+    const waNext = waLink(r.next_whatsapp, `Olá ${nextName || "Olá"}! Aqui é da recepção 🙂`);
+
+    // bloco de conteúdo por status
+    let body = "";
+    let actions = "";
+
+    if (st === "ocupado") {
+      body = `
+        <div class="muted small" style="margin-top:8px;">
+          <strong>${occName || "Hóspede"}</strong><br/>
+          Sai: <span class="mono">${escapeHtml(occOut)}</span>
+        </div>
+      `;
+      actions = `
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px;">
+          <a class="btn outline small" href="/reserva.html?id=${encodeURIComponent(occResId)}">Abrir</a>
+          ${waOcc ? `<a class="btn outline small" target="_blank" rel="noopener noreferrer" href="${waOcc}">WhatsApp</a>` : ""}
+          <button class="btn primary small" data-act="checkout" data-id="${encodeURIComponent(occResId)}">Checkout</button>
+        </div>
+      `;
+    } else if (st === "reservado_hoje") {
+      body = `
+        <div class="muted small" style="margin-top:8px;">
+          Entra hoje: <strong>${nextName || "Reserva"}</strong><br/>
+          Check-in: <span class="mono">${escapeHtml(nextIn)}</span>
+        </div>
+      `;
+      actions = `
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px;">
+          <a class="btn outline small" href="/reserva.html?id=${encodeURIComponent(nextResId)}">Abrir</a>
+          ${waNext ? `<a class="btn outline small" target="_blank" rel="noopener noreferrer" href="${waNext}">WhatsApp</a>` : ""}
+          <button class="btn primary small" data-act="checkin" data-id="${encodeURIComponent(nextResId)}">Fazer check-in</button>
+        </div>
+      `;
+    } else if (st === "reservado_futuro") {
+      body = `
+        <div class="muted small" style="margin-top:8px;">
+          Próxima: <strong>${nextName || "Reserva"}</strong><br/>
+          Entra: <span class="mono">${escapeHtml(nextIn)}</span>
+        </div>
+      `;
+      actions = `
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px;">
+          <a class="btn outline small" href="/reserva.html?id=${encodeURIComponent(nextResId)}">Abrir</a>
+          ${waNext ? `<a class="btn outline small" target="_blank" rel="noopener noreferrer" href="${waNext}">WhatsApp</a>` : ""}
+        </div>
+      `;
+    } else {
+      body = `<div class="muted small" style="margin-top:8px;">Livre agora.</div>`;
+      actions = `
+        <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:12px;">
+          <button class="btn primary small" data-act="walkin" data-room="${encodeURIComponent(r.quarto_id)}">Walk-in</button>
+          <a class="btn outline small" href="/reserva-nova.html?quarto=${encodeURIComponent(r.quarto_id)}">Reservar</a>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="mini-card" data-status="${escapeHtml(st)}" data-search="${escapeHtml((r.codigo||"")+" "+(r.nome||"")+" "+(r.tipo||""))}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div style="font-weight:900;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${roomTitle(r)}
+          </div>
+          ${statusPill(st)}
+        </div>
+
+        <div class="muted small" style="margin-top:6px;">${roomMeta(r)}</div>
+        ${body}
+        ${actions}
+      </div>
+    `;
+  }
+
+  function applyFilter() {
+    const q = (elSearch?.value || "").trim().toLowerCase();
+    const f = (elFilter?.value || "all").trim();
+
+    const cards = Array.from(elGrid?.children || []);
+    cards.forEach((card) => {
+      const st = card.getAttribute("data-status") || "";
+      const s = (card.getAttribute("data-search") || "").toLowerCase();
+
+      const okStatus = (f === "all") ? true : (st === f);
+      const okSearch = !q ? true : s.includes(q);
+
+      card.style.display = (okStatus && okSearch) ? "" : "none";
     });
-  });
+  }
 
-  elQ?.addEventListener("input", () => render());
-}
+  // ---------- load ----------
+  async function load() {
+    show(elLoading, true);
+    show(elEmpty, false);
+    show(elGrid, false);
+    setMsg("");
 
-bind();
-load();
+    const { data, error } = await supabase
+      .from("agenda_quartos_mapa")
+      .select("*")
+      .eq("user_id", USER.id)
+      .order("ordem", { ascending: true })
+      .order("codigo", { ascending: true });
+
+    if (error) {
+      console.error("[mapa] load error:", error);
+      setMsg("Erro ao carregar mapa. Verifique view/RLS.", "error");
+      show(elLoading, false);
+      show(elEmpty, true);
+      if (elEmpty) elEmpty.innerHTML = `<p class="muted">Erro ao carregar mapa.</p>`;
+      return;
+    }
+
+    ALL = data || [];
+
+    show(elLoading, false);
+
+    if (!ALL.length) {
+      show(elEmpty, true);
+      return;
+    }
+
+    if (elGrid) {
+      elGrid.innerHTML = ALL.map(renderCard).join("");
+    }
+
+    show(elGrid, true);
+    applyFilter();
+
+    // bind actions (delegation)
+    elGrid?.addEventListener("click", async (ev) => {
+      const btn = ev.target?.closest("button[data-act]");
+      if (!btn) return;
+
+      const act = btn.getAttribute("data-act");
+
+      if (act === "walkin") {
+        const room = btn.getAttribute("data-room");
+        if (room) await actionWalkin(room);
+      }
+
+      if (act === "checkin") {
+        const id = btn.getAttribute("data-id");
+        if (id) await actionCheckin(id);
+      }
+
+      if (act === "checkout") {
+        const id = btn.getAttribute("data-id");
+        if (id) await actionCheckout(id);
+      }
+    }, { once: true });
+  }
+
+  // ---------- boot ----------
+  (async function boot() {
+    USER = await requireAuth({ redirectTo: "/entrar.html?next=/mapa.html", renderUserInfo: false });
+    if (!USER) return;
+
+    const today = isoToday();
+    if (elToday) elToday.textContent = `Hoje: ${fmtBR(today)} • Livre/Reservado/Ocupado`;
+
+    await load();
+
+    btnReload?.addEventListener("click", load);
+    elSearch?.addEventListener("input", applyFilter);
+    elFilter?.addEventListener("change", applyFilter);
+  })();
+})();
