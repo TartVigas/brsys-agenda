@@ -41,9 +41,9 @@
 
   <main class="wrap main">
 
-    <!-- Atalhos -->
+    <!-- VISÃO GERAL -->
     <section class="card">
-      <div class="row" style="align-items:center;justify-content:space-between;">
+      <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <h1 class="h1" style="margin:0;">Visão geral</h1>
         <a class="btn outline small" href="/reserva-nova.html">+ Nova reserva</a>
       </div>
@@ -52,8 +52,8 @@
         Resumo rápido do dia e atalhos para trabalhar sem enrolação.
       </p>
 
-      <!-- KPIs (agora PMS) -->
-      <div class="grid-3" id="kpis" style="margin-top:14px;">
+      <!-- KPIs -->
+      <div class="grid-3" style="margin-top:14px;">
         <div class="mini-card">
           <div class="muted small">Check-ins hoje</div>
           <div class="kpi" id="kpiCheckin">—</div>
@@ -83,15 +83,19 @@
         </div>
       </div>
 
+      <!-- ATALHOS -->
       <div class="cta-row" style="margin-top:16px;flex-wrap:wrap;gap:10px;">
         <a class="btn primary" href="/reservas.html">Ver reservas</a>
         <a class="btn outline" href="/hoje.html">Hoje</a>
         <a class="btn outline" href="/hospedes.html">Hóspedes</a>
-        <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">Suporte WhatsApp</a>
+        <a class="btn outline" href="/quartos.html">Quartos</a>
+        <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
+          Suporte WhatsApp
+        </a>
       </div>
     </section>
 
-    <!-- Operação de Hoje (PMS real) -->
+    <!-- OPERAÇÃO DE HOJE -->
     <section class="card" style="margin-top:14px;">
       <div class="row" style="align-items:center;justify-content:space-between;">
         <h2 class="h2" style="margin:0;">Operação de hoje</h2>
@@ -110,67 +114,74 @@
       <div id="opsMsg" class="muted small" style="margin-top:10px;display:none;"></div>
 
       <div class="grid-2" style="margin-top:12px;">
-        <div class="mini-card" style="min-height:140px;">
+        <div class="mini-card">
           <div class="row" style="align-items:center;justify-content:space-between;">
             <div>
-              <div style="font-weight:800;">Chegadas hoje</div>
+              <strong>Chegadas hoje</strong>
               <div class="muted small">check-in = hoje</div>
             </div>
-            <div class="kpi" id="countChegadas" style="font-size:20px;">—</div>
+            <div class="kpi" id="countChegadas">—</div>
           </div>
           <div id="listChegadas" class="list" style="margin-top:10px;"></div>
-          <div id="emptyChegadas" class="muted small" style="display:none;margin-top:10px;">Nenhuma chegada hoje.</div>
+          <div id="emptyChegadas" class="muted small" style="display:none;margin-top:10px;">
+            Nenhuma chegada hoje.
+          </div>
         </div>
 
-        <div class="mini-card" style="min-height:140px;">
+        <div class="mini-card">
           <div class="row" style="align-items:center;justify-content:space-between;">
             <div>
-              <div style="font-weight:800;">Saídas hoje</div>
+              <strong>Saídas hoje</strong>
               <div class="muted small">check-out = hoje</div>
             </div>
-            <div class="kpi" id="countSaidas" style="font-size:20px;">—</div>
+            <div class="kpi" id="countSaidas">—</div>
           </div>
           <div id="listSaidas" class="list" style="margin-top:10px;"></div>
-          <div id="emptySaidas" class="muted small" style="display:none;margin-top:10px;">Nenhuma saída hoje.</div>
+          <div id="emptySaidas" class="muted small" style="display:none;margin-top:10px;">
+            Nenhuma saída hoje.
+          </div>
         </div>
       </div>
 
       <div class="mini-card" style="margin-top:12px;">
         <div class="row" style="align-items:center;justify-content:space-between;">
           <div>
-            <div style="font-weight:800;">Hospedados agora</div>
+            <strong>Hospedados agora</strong>
             <div class="muted small">check-in ≤ hoje e check-out &gt; hoje</div>
           </div>
-          <div class="kpi" id="countHospedados" style="font-size:20px;">—</div>
+          <div class="kpi" id="countHospedados">—</div>
         </div>
 
         <div id="listHospedados" class="list" style="margin-top:10px;"></div>
-        <div id="emptyHospedados" class="muted small" style="display:none;margin-top:10px;">Nenhum hóspede hospedado agora.</div>
+        <div id="emptyHospedados" class="muted small" style="display:none;margin-top:10px;">
+          Nenhum hóspede hospedado agora.
+        </div>
       </div>
     </section>
 
-    <!-- Quartos (grid) -->
-<section class="card" style="margin-top:14px;">
-  <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-    <h2 class="h2" style="margin:0;">Quartos</h2>
-    <a class="muted small" href="/quartos.html">Gerenciar →</a>
-  </div>
+    <!-- QUARTOS -->
+    <section class="card" style="margin-top:14px;">
+      <div class="row" style="align-items:center;justify-content:space-between;">
+        <h2 class="h2" style="margin:0;">Quartos</h2>
+        <a class="muted small" href="/quartos.html">Gerenciar →</a>
+      </div>
 
-  <div id="roomsLoading" style="margin-top:10px;">
-    <p class="muted">Carregando quartos…</p>
-  </div>
+      <div id="roomsLoading" style="margin-top:10px;">
+        <p class="muted">Carregando quartos…</p>
+      </div>
 
-  <div id="roomsEmpty" style="display:none;margin-top:12px;">
-    <p class="muted" style="margin:0;">Nenhum quarto cadastrado.</p>
-    <div class="cta-row" style="margin-top:10px;">
-      <a class="btn primary" href="/quartos.html">Cadastrar quartos</a>
-    </div>
-  </div>
+      <div id="roomsEmpty" style="display:none;margin-top:12px;">
+        <p class="muted">Nenhum quarto cadastrado.</p>
+        <a class="btn primary" href="/quartos.html">Cadastrar quartos</a>
+      </div>
 
-  <div id="roomsGrid" style="display:none;margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
-</section>
-    
-    <!-- Últimas reservas -->
+      <div id="roomsGrid"
+           style="display:none;margin-top:12px;
+           display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+      </div>
+    </section>
+
+    <!-- ÚLTIMAS RESERVAS -->
     <section class="card" style="margin-top:14px;">
       <div class="row" style="align-items:center;justify-content:space-between;">
         <h2 class="h2" style="margin:0;">Últimas reservas</h2>
@@ -187,11 +198,8 @@
       </div>
 
       <div id="homeEmpty" style="display:none;margin-top:12px;">
-        <p class="muted" style="margin:0;">Nenhuma reserva ainda.</p>
-        <p class="muted small" style="margin-top:6px;">Crie 1 reserva teste pra validar o fluxo.</p>
-        <div class="cta-row" style="margin-top:10px;">
-          <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
-        </div>
+        <p class="muted">Nenhuma reserva ainda.</p>
+        <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
       </div>
 
       <div id="homeList" class="list" style="display:none;margin-top:12px;"></div>
@@ -200,6 +208,7 @@
     <footer class="foot muted small">
       BRsys Agenda • V1 • suporte via WhatsApp
     </footer>
+
   </main>
 
   <!-- Bottom Nav -->
@@ -210,12 +219,10 @@
     <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
   </nav>
 
-  <!-- Guard primeiro -->
+  <!-- Auth guard -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
     const user = await requireAuth({ redirectTo: "/entrar.html?next=/app.html", renderUserInfo: false });
-
-    // preencher e-mail no topo
     const el = document.getElementById("userEmail");
     if (el) el.textContent = user?.email || "(sem e-mail)";
   </script>
