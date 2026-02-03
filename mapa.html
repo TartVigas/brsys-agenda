@@ -1,1 +1,134 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa de Quartos • Agenda BRsys</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Mapa de quartos com ocupação e previsões (Micro-PMS V1)." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/mapa.html" />
+
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/favicon.png" />
+
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+
+<body class="app-body">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-sub muted">Mapa de quartos • V1</div>
+      </div>
+
+      <div class="userbox">
+        <div class="muted small">Logado:</div>
+        <div id="userEmail" class="mono small">carregando…</div>
+        <button id="logout" class="btn outline small">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap main">
+
+    <!-- Header ações -->
+    <section class="card">
+      <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <h1 class="h1" style="margin:0;">Mapa de quartos</h1>
+          <div id="summary" class="muted small" style="margin-top:6px;">Carregando…</div>
+        </div>
+
+        <div class="row" style="gap:10px;flex-wrap:wrap;">
+          <a class="btn primary" href="/reserva-nova.html">+ Nova reserva</a>
+          <a class="btn outline" href="/app.html">Home</a>
+        </div>
+      </div>
+
+      <!-- Busca -->
+      <div style="margin-top:14px;">
+        <label class="label" style="margin:0;">
+          Buscar quarto
+          <input class="input" id="q" type="text" placeholder="Ex: S02, Suíte, 03..." />
+        </label>
+      </div>
+
+      <!-- Filtros -->
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+        <button class="btn outline small" data-filter="all">Todos</button>
+        <button class="btn outline small" data-filter="free">Livres</button>
+        <button class="btn outline small" data-filter="occ">Ocupados</button>
+        <button class="btn outline small" data-filter="today">Hoje</button>
+      </div>
+
+      <div id="msg" class="muted small" style="margin-top:10px;"></div>
+    </section>
+
+    <!-- Conteúdo -->
+    <section class="card" style="margin-top:14px;">
+
+      <!-- Loading -->
+      <div id="stateLoading">
+        <h2 class="h2" style="margin:0;">Carregando…</h2>
+        <p class="muted">Montando o mapa de quartos.</p>
+
+        <div class="skeleton">
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+          <div class="sk-line"></div>
+        </div>
+      </div>
+
+      <!-- Empty -->
+      <div id="stateEmpty" style="display:none;">
+        <h2 class="h2" style="margin:0;">Nenhum quarto cadastrado</h2>
+        <p class="muted" style="margin-top:8px;">
+          Cadastre os quartos para liberar o mapa e o walk-in.
+        </p>
+
+        <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
+          <a class="btn primary" href="/quartos.html">Cadastrar quartos</a>
+          <a class="btn outline" href="/app.html">Voltar</a>
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div id="stateGrid" style="display:none;">
+        <div id="grid"
+             style="margin-top:6px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
+        </div>
+      </div>
+
+    </section>
+
+    <footer class="foot muted small">
+      BRsys Agenda • V1 • suporte via WhatsApp
+    </footer>
+
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
+    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
+    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+  </nav>
+
+  <!-- Guard -->
+  <script type="module">
+    import { requireAuth } from "/js/auth.js";
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/mapa.html", renderUserInfo: false });
+    const el = document.getElementById("userEmail");
+    if (el) el.textContent = user?.email || "(sem e-mail)";
+  </script>
+
+  <script type="module" src="/js/nav.js"></script>
+  <script type="module" src="/js/mapa.js"></script>
+</body>
+</html>
 
