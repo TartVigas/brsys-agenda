@@ -1,7 +1,9 @@
-// /js/reserva-nova.js — cria reserva (V1.7)
+// /js/reserva-nova.js — cria reserva (V1.9 - DAY USE)
 // - suporta query: ?quarto_id=UUID (novo) OU ?quarto=UUID (legado)
-// - suporta query: ?walkin=1 -> preenche checkin=hoje, checkout=amanhã
+// - suporta query: ?walkin=1 -> preenche checkin=hoje, checkout=hoje (DAY USE por padrão)
 // - mantém contrato WhatsApp: DB armazena digits intl sem "+": 5513997408157
+// - FIX: envia status='reserved' para passar no check constraint (agenda_reservas_status_chk)
+// - DAY USE: permite checkout === checkin (mesmo dia)
 
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
@@ -47,29 +49,31 @@ function normalizeWhatsappIntl(raw) {
 // máscara visual simples: (DD) 9xxxx-xxxx / (DD) xxxx-xxxx
 function maskBRPhoneInput(el) {
   if (!el) return;
-  el.addEventListener("input", () => {
-    const d = onlyDigits(el.value).slice(0, 11);
+
+  const apply = () => {
+    const d = onlyDigits(el.value).slice(0, 13); // permite começar com 55
     if (!d) { el.value = ""; return; }
-    // tenta formatar como BR (sem +55 na tela, só DDD+num)
-    // se usuário digitou 55..., remove pro display
+
     const local = d.startsWith("55") ? d.slice(2) : d;
     const ddd = local.slice(0, 2);
     const num = local.slice(2);
 
+    if (!ddd) { el.value = local; return; }
+
     if (num.length <= 8) {
-      // fixo
       const a = num.slice(0, 4);
       const b = num.slice(4, 8);
       el.value = `(${ddd}) ${a}${b ? "-" + b : ""}`.trim();
-      return;
     } else {
-      // celular 9 dígitos
       const a = num.slice(0, 5);
       const b = num.slice(5, 9);
       el.value = `(${ddd}) ${a}${b ? "-" + b : ""}`.trim();
-      return;
     }
-  });
+  };
+
+  el.addEventListener("input", apply);
+  el.addEventListener("paste", () => setTimeout(apply, 0));
+  el.addEventListener("blur", apply);
 }
 
 /* =========================
@@ -190,7 +194,10 @@ function getFormPayload(userId) {
   if (!nome_hospede) throw new Error("Informe o nome do hóspede.");
   if (!checkin) throw new Error("Check-in inválido. Use DD/MM/AAAA.");
   if (!checkout) throw new Error("Check-out inválido. Use DD/MM/AAAA.");
-  if (checkout <= checkin) throw new Error("Check-out precisa ser maior que o check-in.");
+
+  // ✅ DAY USE: permite checkout == checkin
+  // ❌ só bloqueia quando checkout < checkin
+  if (checkout < checkin) throw new Error("Check-out não pode ser menor que o check-in.");
 
   return {
     user_id: userId,
@@ -200,6 +207,7 @@ function getFormPayload(userId) {
     checkout,
     observacoes: observacoes || null,
     quarto_id,
+    status: "reserved", // ✅ passa no check constraint
   };
 }
 
@@ -234,7 +242,8 @@ async function insertReserva(payload) {
    - ?checkout=YYYY-MM-DD
    - ?quarto_id=UUID (novo)
    - ?quarto=UUID (legado)
-   - ?walkin=1 -> preenche hoje/amanhã (se campos vazios)
+   - ?walkin=1 -> DAY USE por padrão: hoje/hoje
+   - ?pernoite=1 (opcional): hoje/amanhã
 ========================= */
 function applyPrefillFromURL() {
   try {
@@ -248,28 +257,25 @@ function applyPrefillFromURL() {
     const quartoId = (quartoIdNew || quartoIdOld || "").trim();
 
     const walkin = url.searchParams.get("walkin") === "1";
+    const pernoite = url.searchParams.get("pernoite") === "1";
 
-    // datas
     if (walkin) {
       const today = isoTodayLocal();
-      const tomorrow = isoAddDays(today, 1);
+      const outIso = pernoite ? isoAddDays(today, 1) : today;
 
       const inEl = $("#checkin");
       const outEl = $("#checkout");
 
-      // só preenche se estiver vazio (não briga com usuário)
       if (inEl && !inEl.value) inEl.value = isoToBR(today);
-      if (outEl && !outEl.value) outEl.value = isoToBR(tomorrow);
+      if (outEl && !outEl.value) outEl.value = isoToBR(outIso);
 
-      // sugestão leve na obs se estiver vazia
       const obsEl = $("#obs");
-      if (obsEl && !obsEl.value) obsEl.value = "Walk-in";
+      if (obsEl && !obsEl.value) obsEl.value = pernoite ? "Walk-in (pernoite)" : "Day-use / Walk-in";
     } else {
       if (ci && isValidISODate(ci) && $("#checkin")) $("#checkin").value = isoToBR(ci);
       if (co && isValidISODate(co) && $("#checkout")) $("#checkout").value = isoToBR(co);
     }
 
-    // quarto (não seta aqui ainda se a lista não carregou; guardamos)
     return { quartoId };
   } catch {
     return { quartoId: "" };
