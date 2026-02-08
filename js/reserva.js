@@ -1,4 +1,4 @@
-// /js/reserva.js — V2 (PMS status + ocupação via check-in)
+// /js/reserva.js — V2 corrigido (status compatível com CHECK em inglês + fallback seguro)
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
@@ -30,8 +30,12 @@ function isoTodayLocal() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function isoNowBR() {
+  return new Date().toLocaleString("pt-BR");
+}
+
 /* =========================
-   WhatsApp (Round 2A)
+   WhatsApp
 ========================= */
 function normalizeWhatsappTo55(raw) {
   const d = onlyDigits(raw);
@@ -129,43 +133,89 @@ function disableSave(disabled) {
   btn.style.opacity = disabled ? "0.7" : "1";
 }
 
-function isoNowBR() {
-  return new Date().toLocaleString("pt-BR");
-}
-
 /* =========================
-   PMS Status (V2)
+   STATUS (DB em inglês) + labels em PT
+   Importante: como não temos a lista completa do CHECK,
+   trabalhamos com um conjunto comum e fallback seguro.
 ========================= */
-const STATUS = {
-  reservado: "reservado",
-  hospedado: "hospedado",
-  finalizado: "finalizado",
-  cancelado: "cancelado",
+const DB_STATUS = {
+  quote: "quote",
+  reserved: "reserved",
+  confirmed: "confirmed",
+  inhouse: "in_house",       // comum (nem sempre existe)
+  checkedin: "checked_in",    // comum (nem sempre existe)
+  checkedout: "checked_out",  // comum (nem sempre existe)
+  cancelled: "cancelled",     // comum (nem sempre existe)
+  noshow: "no_show",          // comum (nem sempre existe)
+  done: "done",               // comum (nem sempre existe)
 };
 
-function normalizeStatus(s) {
+const STATUS_LABEL_PT = {
+  [DB_STATUS.quote]: "Orçamento",
+  [DB_STATUS.reserved]: "Reservado",
+  [DB_STATUS.confirmed]: "Confirmado",
+  [DB_STATUS.inhouse]: "Hospedado",
+  [DB_STATUS.checkedin]: "Check-in",
+  [DB_STATUS.checkedout]: "Checkout",
+  [DB_STATUS.cancelled]: "Cancelado",
+  [DB_STATUS.noshow]: "No-show",
+  [DB_STATUS.done]: "Finalizado",
+};
+
+// Conjunto preferido para botões (ordem de tentativa)
+const PREFERRED = {
+  CHECKIN: [DB_STATUS.inhouse, DB_STATUS.checkedin, DB_STATUS.confirmed], // tenta nessa ordem
+  CHECKOUT: [DB_STATUS.checkedout, DB_STATUS.done],
+  CANCEL: [DB_STATUS.cancelled],
+};
+
+function normalizeDbStatus(s) {
   const v = String(s || "").toLowerCase().trim();
-  if (v === STATUS.hospedado) return STATUS.hospedado;
-  if (v === STATUS.finalizado) return STATUS.finalizado;
-  if (v === STATUS.cancelado) return STATUS.cancelado;
-  return STATUS.reservado; // default seguro
+  // se já for um dos conhecidos, mantém; senão fallback "reserved"
+  const known = new Set(Object.values(DB_STATUS));
+  if (known.has(v)) return v;
+  return DB_STATUS.reserved;
 }
 
 function statusLabel(s) {
-  const v = normalizeStatus(s);
-  if (v === STATUS.hospedado) return "Hospedado";
-  if (v === STATUS.finalizado) return "Finalizado";
-  if (v === STATUS.cancelado) return "Cancelado";
-  return "Reservado";
+  const v = normalizeDbStatus(s);
+  return STATUS_LABEL_PT[v] || "Reservado";
 }
 
 function statusPillTone(s) {
-  // só inline style simples pra não mexer no CSS agora
-  const v = normalizeStatus(s);
-  if (v === STATUS.hospedado) return "rgba(255,210,120,.95)"; // warn
-  if (v === STATUS.finalizado) return "rgba(102,242,218,.95)"; // ok
-  if (v === STATUS.cancelado) return "rgba(255,120,120,.95)"; // error
-  return "rgba(255,255,255,.70)"; // neutro
+  const v = normalizeDbStatus(s);
+  if (v === DB_STATUS.inhouse || v === DB_STATUS.checkedin) return "rgba(255,210,120,.95)";
+  if (v === DB_STATUS.checkedout || v === DB_STATUS.done) return "rgba(102,242,218,.95)";
+  if (v === DB_STATUS.cancelled || v === DB_STATUS.noshow) return "rgba(255,120,120,.95)";
+  if (v === DB_STATUS.confirmed) return "rgba(160,200,255,.95)";
+  return "rgba(255,255,255,.70)";
+}
+
+/**
+ * Tenta atualizar status com uma lista de candidatos.
+ * Se o banco rejeitar (check constraint), tenta o próximo.
+ */
+async function tryUpdateStatus(candidates, baseWhere) {
+  let lastErr = null;
+
+  for (const st of candidates) {
+    const { data, error } = await supabase
+      .from("agenda_reservas")
+      .update({ status: st, updated_at: new Date().toISOString() })
+      .match(baseWhere)
+      .select("*")
+      .single();
+
+    if (!error) return { data, used: st };
+    lastErr = error;
+
+    const msg = String(error?.message || "").toLowerCase();
+    const isConstraint = msg.includes("check constraint") || msg.includes("violates");
+    // se for constraint, tenta próximo; se for outra coisa, para
+    if (!isConstraint) break;
+  }
+
+  throw lastErr || new Error("Não foi possível atualizar o status.");
 }
 
 function renderStatusUI(model) {
@@ -176,7 +226,7 @@ function renderStatusUI(model) {
   const btnCheckout = document.getElementById("btnCheckout");
   const btnCancelar = document.getElementById("btnCancelar");
 
-  const st = normalizeStatus(model?.status);
+  const st = normalizeDbStatus(model?.status);
 
   if (pill) {
     pill.textContent = statusLabel(st);
@@ -184,21 +234,20 @@ function renderStatusUI(model) {
     pill.style.color = statusPillTone(st);
   }
 
-  // Hints rápidos (pra evitar confusão do “ocupa hoje”)
   if (hint) {
     const today = isoTodayLocal();
     const isToday = model?.checkin === today;
 
     let t = "";
-    if (st === STATUS.reservado) {
+    if (st === DB_STATUS.reserved || st === DB_STATUS.confirmed || st === DB_STATUS.quote) {
       t = isToday
-        ? "Não ocupa ainda. Só ocupa após Check-in."
+        ? "Só ocupa após Check-in."
         : "Reserva criada. Só ocupa após Check-in.";
-    } else if (st === STATUS.hospedado) {
+    } else if (st === DB_STATUS.inhouse || st === DB_STATUS.checkedin) {
       t = "Ocupando quarto agora (Check-in feito).";
-    } else if (st === STATUS.finalizado) {
+    } else if (st === DB_STATUS.checkedout || st === DB_STATUS.done) {
       t = "Reserva finalizada (Checkout).";
-    } else if (st === STATUS.cancelado) {
+    } else if (st === DB_STATUS.cancelled) {
       t = "Reserva cancelada.";
     }
 
@@ -206,20 +255,22 @@ function renderStatusUI(model) {
     hint.style.display = t ? "inline" : "none";
   }
 
-  // Botões PMS por status
+  // Botões: liberamos check-in quando estiver "reserved/confirmed/quote"
   const show = (el, on) => { if (el) el.style.display = on ? "" : "none"; };
 
-  show(btnCheckin, st === STATUS.reservado);
-  show(btnCancelar, st === STATUS.reservado);
+  const canCheckin = [DB_STATUS.quote, DB_STATUS.reserved, DB_STATUS.confirmed].includes(st);
+  const canCheckout = [DB_STATUS.inhouse, DB_STATUS.checkedin].includes(st);
+  const canCancel = [DB_STATUS.quote, DB_STATUS.reserved, DB_STATUS.confirmed].includes(st);
 
-  show(btnCheckout, st === STATUS.hospedado);
+  show(btnCheckin, canCheckin);
+  show(btnCancelar, canCancel);
+  show(btnCheckout, canCheckout);
 
-  // Mensagem PMS limpa
   setPmsMsg("");
 }
 
 /* =========================
-   Field mapping (V2)
+   Field mapping
 ========================= */
 function toFormModel(row) {
   return {
@@ -228,8 +279,8 @@ function toFormModel(row) {
     checkin: row?.checkin ?? "",
     checkout: row?.checkout ?? "",
     obs: row?.observacoes ?? "",
-    status: normalizeStatus(row?.status),     // ✅ novo
-    quarto_id: row?.quarto_id ?? null,        // ✅ útil pro mapa
+    status: normalizeDbStatus(row?.status),
+    quarto_id: row?.quarto_id ?? null,
     created_at: row?.created_at ?? null,
     updated_at: row?.updated_at ?? null,
   };
@@ -237,8 +288,6 @@ function toFormModel(row) {
 
 function toDbPayload(model) {
   const whatsapp55 = normalizeWhatsappTo55(model.whatsapp);
-
-  // status nunca vem daqui (status é PMS controlado por botões)
   return {
     nome_hospede: model.nome || null,
     whatsapp: whatsapp55 || null,
@@ -250,7 +299,7 @@ function toDbPayload(model) {
 }
 
 /* =========================
-   Validation (V1 mantém)
+   Validation
 ========================= */
 function validate(model) {
   if (!model.nome || model.nome.trim().length < 2) return "Informe o nome do hóspede.";
@@ -287,7 +336,7 @@ const btnCancelar = document.getElementById("btnCancelar");
 ========================= */
 let USER = null;
 let RESERVA_ID = null;
-let original = null; // snapshot do DB
+let original = null;
 let saving = false;
 let deleting = false;
 let changingStatus = false;
@@ -399,7 +448,6 @@ async function loadReserva() {
 
   original = toFormModel(data);
 
-  // fill form
   if (nomeEl) nomeEl.value = original.nome || "";
 
   if (whatsEl) {
@@ -411,7 +459,6 @@ async function loadReserva() {
   if (checkoutEl) checkoutEl.value = original.checkout || "";
   if (obsEl) obsEl.value = original.obs || "";
 
-  // meta
   if (metaEl) {
     const created = original.created_at ? new Date(original.created_at).toLocaleString("pt-BR") : "—";
     const updated = original.updated_at ? new Date(original.updated_at).toLocaleString("pt-BR") : null;
@@ -434,7 +481,7 @@ async function loadReserva() {
 }
 
 /* =========================
-   Save (update fields)
+   Save (update)
 ========================= */
 async function saveReserva() {
   if (saving || changingStatus) return;
@@ -502,56 +549,52 @@ async function saveReserva() {
 }
 
 /* =========================
-   PMS: update status
+   PMS: update status (com fallback)
 ========================= */
-async function updateStatus(nextStatus) {
+async function updateStatus(kind) {
   if (changingStatus) return;
   changingStatus = true;
 
   const cur = readModelFromForm();
   const name = (cur?.nome || original?.nome || "hóspede").trim();
 
-  // Regras mínimas de segurança:
-  const st = normalizeStatus(original?.status);
+  const st = normalizeDbStatus(original?.status);
   const today = isoTodayLocal();
 
-  if (nextStatus === STATUS.hospedado) {
-    // check-in só faz sentido se hoje >= checkin
+  // Regras mínimas:
+  if (kind === "checkin") {
     if (today < original.checkin) {
       setPmsMsg("Ainda não chegou a data do check-in.", "error");
       changingStatus = false;
       return;
     }
-    if (st !== STATUS.reservado) {
-      setPmsMsg("Check-in só é permitido quando a reserva está como Reservado.", "error");
+    if (![DB_STATUS.quote, DB_STATUS.reserved, DB_STATUS.confirmed].includes(st)) {
+      setPmsMsg("Check-in só é permitido quando a reserva está em Orçamento/Reservado/Confirmado.", "error");
       changingStatus = false;
       return;
     }
   }
 
-  if (nextStatus === STATUS.finalizado) {
-    if (st !== STATUS.hospedado) {
-      setPmsMsg("Checkout só é permitido quando está Hospedado.", "error");
-      changingStatus = false;
-      return;
-    }
-    // opcional: impedir checkout antes da data
-    // (mantive livre, porque motel/hotel pode sair antes)
-  }
-
-  if (nextStatus === STATUS.cancelado) {
-    if (st !== STATUS.reservado) {
-      setPmsMsg("Cancelar só é permitido quando está Reservado.", "error");
+  if (kind === "checkout") {
+    if (![DB_STATUS.inhouse, DB_STATUS.checkedin].includes(st)) {
+      setPmsMsg("Checkout só é permitido quando está Hospedado/Check-in.", "error");
       changingStatus = false;
       return;
     }
   }
 
-  // Confirmação humana
+  if (kind === "cancel") {
+    if (![DB_STATUS.quote, DB_STATUS.reserved, DB_STATUS.confirmed].includes(st)) {
+      setPmsMsg("Cancelar só é permitido quando a reserva está em Orçamento/Reservado/Confirmado.", "error");
+      changingStatus = false;
+      return;
+    }
+  }
+
   let msgConfirm = "";
-  if (nextStatus === STATUS.hospedado) msgConfirm = `Confirmar CHECK-IN de "${name}"?`;
-  if (nextStatus === STATUS.finalizado) msgConfirm = `Confirmar CHECKOUT de "${name}"?`;
-  if (nextStatus === STATUS.cancelado) msgConfirm = `Cancelar a reserva de "${name}"?`;
+  if (kind === "checkin") msgConfirm = `Confirmar CHECK-IN de "${name}"?`;
+  if (kind === "checkout") msgConfirm = `Confirmar CHECKOUT de "${name}"?`;
+  if (kind === "cancel") msgConfirm = `Cancelar a reserva de "${name}"?`;
 
   if (msgConfirm && !window.confirm(msgConfirm)) {
     changingStatus = false;
@@ -560,28 +603,32 @@ async function updateStatus(nextStatus) {
 
   setPmsMsg("Atualizando status…", "info");
 
-  const { data, error } = await supabase
-    .from("agenda_reservas")
-    .update({ status: nextStatus, updated_at: new Date().toISOString() })
-    .eq("id", RESERVA_ID)
-    .eq("user_id", USER.id)
-    .select("*")
-    .single();
+  const where = { id: RESERVA_ID, user_id: USER.id };
 
-  changingStatus = false;
+  try {
+    let candidates = [DB_STATUS.reserved];
 
-  if (error) {
+    if (kind === "checkin") candidates = PREFERRED.CHECKIN.filter(Boolean);
+    if (kind === "checkout") candidates = PREFERRED.CHECKOUT.filter(Boolean);
+    if (kind === "cancel") candidates = PREFERRED.CANCEL.filter(Boolean);
+
+    const { data, used } = await tryUpdateStatus(candidates, where);
+
+    original = toFormModel(data);
+    renderStatusUI(original);
+
+    setPmsMsg(`Status atualizado: ${statusLabel(used)} ✅`, "ok");
+    refreshSaveState();
+  } catch (error) {
     console.error("[reserva] status update error:", error);
-    setPmsMsg("Erro ao atualizar status. Confira se a coluna status existe e RLS permite update.", "error");
-    return;
+    setPmsMsg(
+      "Não consegui atualizar o status (provável CHECK constraint no banco). " +
+      "Me mande a lista completa do constraint para mapear corretamente.",
+      "error"
+    );
+  } finally {
+    changingStatus = false;
   }
-
-  original = toFormModel(data);
-  renderStatusUI(original);
-  setPmsMsg(`Status atualizado: ${statusLabel(original.status)} ✅`, "ok");
-
-  // atualiza estado do salvar (pra não ficar “dirty” por nada)
-  refreshSaveState();
 }
 
 /* =========================
@@ -632,10 +679,10 @@ btnExcluir?.addEventListener("click", async () => {
   await deleteReserva();
 });
 
-// PMS buttons
-btnCheckin?.addEventListener("click", async () => updateStatus(STATUS.hospedado));
-btnCheckout?.addEventListener("click", async () => updateStatus(STATUS.finalizado));
-btnCancelar?.addEventListener("click", async () => updateStatus(STATUS.cancelado));
+// PMS buttons (se existirem no HTML)
+btnCheckin?.addEventListener("click", async () => updateStatus("checkin"));
+btnCheckout?.addEventListener("click", async () => updateStatus("checkout"));
+btnCancelar?.addEventListener("click", async () => updateStatus("cancel"));
 
 /* =========================
    Boot
