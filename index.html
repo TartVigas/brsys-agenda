@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#0b1414" />
 
-  <title>Agenda BRsys — Agenda hoteleira simples para reservas diretas (WhatsApp)</title>
-  <meta name="description" content="Agenda BRsys é uma agenda hoteleira online simples para hotéis e pousadas. Controle reservas diretas com foco em WhatsApp, sem planilhas, sem papel e sem PMS complicado." />
+  <title>Agenda PMS BRsys — Micro PMS leve para reservas, check-in/out e conta simples</title>
+  <meta name="description" content="Agenda PMS BRsys é um micro PMS leve para hotéis e pousadas: reservas, check-in/check-out, mapa de quartos por status e conta simples (diárias + extras) com extrato/fechamento." />
 
   <!-- SEO: manter NOINDEX enquanto valida -->
   <meta name="robots" content="noindex,nofollow" />
@@ -15,16 +15,16 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="BRsys" />
-  <meta property="og:title" content="Agenda BRsys — Agenda hoteleira simples para reservas diretas (WhatsApp)" />
-  <meta property="og:description" content="Controle reservas de hotéis e pousadas sem papel e sem planilhas. Ação direta no WhatsApp. Produto leve (micro PMS) para o dia a dia." />
+  <meta property="og:title" content="Agenda PMS BRsys — Micro PMS leve (WhatsApp + Operação)" />
+  <meta property="og:description" content="Reservas + Check-in/out + Mapa de Quartos + Conta simples. Um PMS leve para sair do papel e organizar o dia a dia." />
   <meta property="og:url" content="https://agenda.brsys.com.br/" />
   <meta property="og:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" />
-  <meta property="og:image:alt" content="Agenda BRsys - Agenda hoteleira simples para hotéis e pousadas" />
+  <meta property="og:image:alt" content="Agenda PMS BRsys - Micro PMS leve para hotéis e pousadas" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Agenda BRsys — Agenda hoteleira simples (WhatsApp)" />
-  <meta name="twitter:description" content="Reservas diretas com foco em WhatsApp. Sem PMS complicado." />
+  <meta name="twitter:title" content="Agenda PMS BRsys — Micro PMS leve" />
+  <meta name="twitter:description" content="Reservas + Check-in/out + Conta simples. Sem PMS complicado." />
   <meta name="twitter:image" content="https://agenda.brsys.com.br/img/og-agenda.jpg" />
 
   <link rel="preconnect" href="https://wa.me" />
@@ -40,27 +40,27 @@
         "@type":"Organization",
         "@id":"https://brsys.com.br/#org",
         "name":"BRsys",
-        "url":"https://brsys.com.br/",
-        "sameAs":[
-          "https://brsys.com.br/"
-        ]
+        "url":"https://brsys.com.br/"
       },
       {
         "@type":"WebApplication",
         "@id":"https://agenda.brsys.com.br/#app",
-        "name":"Agenda BRsys",
+        "name":"Agenda PMS BRsys",
         "alternateName":[
-          "BRsys Agenda",
+          "Agenda BRsys",
+          "Micro PMS BRsys",
           "Agenda Hoteleira BRsys"
         ],
         "applicationCategory":"BusinessApplication",
         "operatingSystem":"Web",
         "url":"https://agenda.brsys.com.br/",
-        "description":"Agenda hoteleira online simples para hotéis e pousadas. Controle reservas diretas com foco em WhatsApp, sem planilhas e sem papel.",
+        "description":"Micro PMS leve para hotéis e pousadas: reservas, check-in/check-out, mapa de quartos por status e conta simples com extrato/fechamento.",
         "publisher":{"@id":"https://brsys.com.br/#org"},
         "featureList":[
-          "Cadastro rápido de hóspedes (nome + WhatsApp + datas)",
-          "Lista de reservas por check-in",
+          "Reservas rápidas (nome + WhatsApp + datas)",
+          "Check-in e Check-out em 1 toque",
+          "Mapa de quartos com status (Livre/Ocupado/Limpeza/Bloqueado)",
+          "Conta simples (diárias + extras) com extrato",
           "Ação direta no WhatsApp do hóspede",
           "Uso no celular e no PC (sem instalar)"
         ],
@@ -80,13 +80,14 @@
   <header class="top">
     <div class="wrap">
       <div class="topbar">
-        <a class="brand" href="https://brsys.com.br/" aria-label="BRsys">
+        <a class="brand" href="#topo" aria-label="Agenda PMS BRsys">
+          <!-- Se quiser colocar o logo gerado, use um arquivo seu (ex: /img/logo-agenda-pms.png) -->
+          <!-- <img src="/img/logo-agenda-pms.png" alt="Agenda PMS BRsys" class="brandLogo" /> -->
           <strong>BRsys</strong>
-          <span class="pill">Agenda</span>
+          <span class="pill">Agenda PMS</span>
         </a>
 
         <div class="actions" style="margin:0">
-          <!-- TROCA AQUI -->
           <a class="btn outline" href="/entrar.html">Entrar</a>
           <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
             WhatsApp
@@ -100,33 +101,49 @@
     <!-- Hero -->
     <section class="hero" id="topo">
       <div class="heroCard">
-        <div class="kicker">Produto em implantação • V1</div>
+        <div class="kicker">Produto em implantação • V1 • Micro PMS leve</div>
 
-        <h1>Agenda hoteleira simples para reservas diretas</h1>
+        <h1>Reservas, Check-in/out e Conta simples — sem PMS complicado</h1>
 
         <p class="sub">
-          A <strong>Agenda BRsys</strong> organiza suas reservas de <strong>hotel ou pousada</strong>
-          sem papel, sem planilha e sem sistema complicado.
+          O <strong>Agenda PMS BRsys</strong> é um <strong>micro PMS</strong> para <strong>hotéis e pousadas</strong>
+          que querem sair do papel/planilha e organizar o dia a dia:
+          <strong>reservas</strong>, <strong>status de quartos</strong>, <strong>check-in/check-out</strong> e
+          <strong>fechamento da conta</strong>.
           <br />
           <strong>Foco total no WhatsApp</strong> (ação direta com o hóspede).
         </p>
 
         <div class="actions">
-          <!-- TROCA AQUI -->
-          <a class="btn" href="/entrar.html">
-            Teste grátis agora
-          </a>
+          <a class="btn" href="/entrar.html">Testar agora</a>
           <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
             Falar no WhatsApp
           </a>
-          <a class="btn outline" href="#como-funciona">
-            Ver como funciona
-          </a>
+          <a class="btn outline" href="#como-funciona">Ver como funciona</a>
         </div>
 
         <p class="sub" style="margin-top:10px;font-size:14px;">
           <strong>Sem cartão.</strong> Você entra com e-mail e recebe um link seguro (Magic Link).
         </p>
+      </div>
+    </section>
+
+    <!-- Prova rápida (valor) -->
+    <section class="section" id="valor">
+      <h2>O essencial que justifica o Micro PMS</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>Mapa de quartos por status</h3>
+          <p>Veja na hora: <strong>Livre / Ocupado / Limpeza / Bloqueado</strong>. Um clique e você resolve.</p>
+        </article>
+        <article class="card">
+          <h3>Check-in e Check-out</h3>
+          <p>Operação rápida: entra, ocupa o quarto, registra e finaliza com <strong>fechamento</strong>.</p>
+        </article>
+        <article class="card">
+          <h3>Conta simples (diárias + extras)</h3>
+          <p>Lançamentos básicos (diárias, frigobar, taxas) com <strong>extrato</strong> e <strong>fechar conta</strong>.</p>
+        </article>
       </div>
     </section>
 
@@ -136,35 +153,38 @@
       <div class="grid">
         <article class="card">
           <h3>Hospedagens pequenas</h3>
-          <p>Hotéis, pousadas e chalés que precisam de controle simples, rápido e confiável.</p>
+          <p>Hotéis, pousadas, chalés e hostels que precisam de controle simples, rápido e confiável.</p>
         </article>
         <article class="card">
           <h3>Papel / caderno / WhatsApp</h3>
           <p>Para quem está no improviso e quer organizar reservas sem virar refém de planilhas.</p>
         </article>
         <article class="card">
-          <h3>Micro PMS (sem exagero)</h3>
-          <p>Quando um PMS completo é grande demais — aqui é o essencial do dia a dia.</p>
+          <h3>Day use e pernoite</h3>
+          <p>Funciona para rotinas simples: day use, estadias curtas e controle básico de quartos.</p>
         </article>
       </div>
     </section>
 
     <!-- Como funciona -->
     <section class="section" id="como-funciona">
-      <h2>O que a Agenda BRsys faz</h2>
+      <h2>O que o Agenda PMS BRsys faz</h2>
       <ul>
-        <li><strong>Cadastro rápido</strong> de hóspedes (nome + WhatsApp + datas)</li>
-        <li><strong>Reservas organizadas</strong> por check-in (sem bagunça)</li>
-        <li><strong>WhatsApp em 1 toque</strong> para confirmar chegada/saída</li>
+        <li><strong>Reservas rápidas</strong> (nome + WhatsApp + datas + observação)</li>
+        <li><strong>Check-in / Check-out</strong> simples e direto</li>
+        <li><strong>Mapa de quartos</strong> com cores e status</li>
+        <li><strong>Conta do hóspede</strong> (diárias + extras) + <strong>fechamento</strong></li>
+        <li><strong>WhatsApp em 1 toque</strong> para confirmar e comunicar com o hóspede</li>
         <li><strong>Acesso no celular e no PC</strong> (sem instalar nada)</li>
       </ul>
     </section>
 
-    <!-- Nota -->
+    <!-- Nota (posicionamento) -->
     <section class="section">
       <div class="note">
-        <strong>Importante:</strong> a <strong>Agenda BRsys</strong> não é um PMS completo.
-        É uma <strong>agenda hoteleira leve</strong> para você sair do papel/planilha e ganhar rotina.
+        <strong>Importante:</strong> o <strong>Agenda PMS BRsys</strong> é um <strong>micro PMS</strong>.
+        Ele entrega o essencial do operacional (reservas + quartos + check-in/out + conta simples).
+        Recursos avançados (fiscal, BI pesado, integrações) podem entrar depois.
       </div>
     </section>
 
@@ -174,15 +194,13 @@
         <h2>Quer validar em 2 minutos?</h2>
         <p class="sub">
           Me chama no WhatsApp e eu te digo se serve para sua hospedagem.
+          Se servir, eu já te oriento a implantação rápida.
         </p>
         <div class="actions">
           <a class="btn" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
             Falar agora
           </a>
-          <!-- TROCA AQUI -->
-          <a class="btn outline" href="/entrar.html">
-            Entrar e testar
-          </a>
+          <a class="btn outline" href="/entrar.html">Entrar e testar</a>
         </div>
       </div>
     </section>
@@ -191,7 +209,6 @@
       <div class="mini">
         <div>© <span id="y"></span> BRsys • agenda.brsys.com.br</div>
         <div>
-          <!-- TROCA AQUI -->
           <a href="/entrar.html">Entrar</a>
           <span style="opacity:.35;"> • </span>
           <a href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">WhatsApp</a>
