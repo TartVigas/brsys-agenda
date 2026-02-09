@@ -11,7 +11,6 @@
 
   <link rel="icon" type="image/png" href="/img/favicon.png" />
   <link rel="apple-touch-icon" href="/img/favicon.png" />
-
   <link rel="stylesheet" href="/css/app.css" />
 </head>
 
@@ -99,6 +98,9 @@
         <!-- Mensagem PMS (global) -->
         <div id="pmsMsg" class="muted small" style="margin-top:10px;display:none;"></div>
 
+        <!-- Dica (deep link p/ conta) -->
+        <div id="deepLinkHint" class="muted small" style="margin-top:10px;display:none;"></div>
+
         <form id="formReserva" autocomplete="off" style="margin-top:14px;">
           <label class="label">
             Nome do hóspede
@@ -155,7 +157,8 @@
         <hr style="margin:18px 0;opacity:.15;" />
 
         <!-- CARD: Conta (micro-PMS) -->
-        <section class="card" style="padding:14px;">
+        <!-- id="conta" para suportar /reserva.html?id=...#conta -->
+        <section id="conta" class="card" style="padding:14px;scroll-margin-top:90px;">
           <div class="row" style="align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
             <div>
               <h2 class="h2" style="margin:0;">Conta</h2>
@@ -278,21 +281,35 @@
     <a class="bn-item" data-nav="mapa" href="/mapa.html">Mapa</a>
     <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
     <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
-    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+    <a class="bn-item" data-nav="config" href="/config.html">Config</a>
   </nav>
 
-  <!-- Guard + user email -->
+  <!-- Guard + user email + deep link (#conta) -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
-    const user = await requireAuth({ redirectTo: "/entrar.html?next=/reserva.html", renderUserInfo: false });
+
+    const user = await requireAuth({
+      redirectTo: "/entrar.html?next=/reserva.html",
+      renderUserInfo: false
+    });
+
     const el = document.getElementById("userEmail");
     if (el) el.textContent = user?.email || "(sem e-mail)";
+
+    // Se abrir com #conta, mostra um hint e faz scroll suave
+    if (location.hash === "#conta") {
+      const hint = document.getElementById("deepLinkHint");
+      const alvo = document.getElementById("conta");
+      if (hint) {
+        hint.style.display = "";
+        hint.textContent = "Você abriu direto na Conta (pré-pagamento/lançamentos).";
+      }
+      if (alvo) setTimeout(() => alvo.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+    }
   </script>
 
   <script type="module" src="/js/nav.js"></script>
   <script type="module" src="/js/reserva.js"></script>
-
-  <!-- Conta (micro-PMS) -->
   <script type="module" src="/js/reserva-conta.js"></script>
 
 </body>
