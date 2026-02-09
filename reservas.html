@@ -28,7 +28,7 @@
       <div class="userbox">
         <div class="muted small">Logado:</div>
         <div id="userEmail" class="mono small">carregando…</div>
-        <button id="logout" class="btn outline small">Sair</button>
+        <button id="logout" class="btn outline small" type="button">Sair</button>
       </div>
     </div>
   </header>
@@ -53,16 +53,27 @@
       <div style="margin-top:14px;">
         <label class="label" style="margin:0;">
           Buscar
-          <input class="input" id="q" type="text" placeholder="Nome do hóspede ou WhatsApp..." />
+          <input class="input" id="q" type="search" placeholder="Nome do hóspede, quarto ou WhatsApp..." autocomplete="off" />
         </label>
       </div>
 
-      <!-- Filtros -->
-      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
-        <button class="btn outline small" data-filter="all">Todas</button>
-        <button class="btn outline small" data-filter="today">Hoje</button>
-        <button class="btn outline small" data-filter="future">Futuras</button>
-        <button class="btn outline small" data-filter="past">Passadas</button>
+      <!-- Filtros (segmentado) -->
+      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;align-items:center;">
+        <div class="segmented" role="tablist" aria-label="Filtros de reservas">
+          <button class="seg-btn active" type="button" data-filter="all" role="tab" aria-selected="true">Todas</button>
+          <button class="seg-btn" type="button" data-filter="today" role="tab" aria-selected="false">Hoje</button>
+          <button class="seg-btn" type="button" data-filter="future" role="tab" aria-selected="false">Futuras</button>
+          <button class="seg-btn" type="button" data-filter="past" role="tab" aria-selected="false">Passadas</button>
+        </div>
+
+        <div class="row" style="margin-left:auto;gap:10px;flex-wrap:wrap;">
+          <!-- opcional: ordenação (se seu reservas.js suportar) -->
+          <select id="sort" class="input" style="max-width:220px;display:none;">
+            <option value="checkin_asc">Check-in (↑)</option>
+            <option value="checkin_desc">Check-in (↓)</option>
+            <option value="created_desc">Criação (↓)</option>
+          </select>
+        </div>
       </div>
 
       <div id="msg" class="muted small" style="margin-top:10px;"></div>
@@ -86,7 +97,7 @@
       <div id="stateEmpty" style="display:none;">
         <h2 class="h2" style="margin:0;">Nenhuma reserva ainda</h2>
         <p class="muted" style="margin-top:8px;">
-          Comece criando sua primeira reserva para validar o fluxo.
+          Comece criando sua primeira reserva.
         </p>
 
         <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
@@ -97,7 +108,11 @@
 
       <!-- List -->
       <div id="stateList" style="display:none;">
-        <div id="list"></div>
+        <!-- dica: reservas.js pode colocar cards aqui com:
+             - Abrir (reserva.html?id=...)
+             - WhatsApp
+             - (futuro) Check-in rápido / Pré-pagamento: linka pra reserva.html#conta ou reserva.html?tab=conta -->
+        <div id="list" class="stack"></div>
       </div>
     </section>
 
@@ -106,12 +121,12 @@
     </footer>
   </main>
 
-  <!-- Bottom Nav -->
+  <!-- Bottom Nav (corrigido) -->
   <nav class="bottom-nav">
     <a class="bn-item" data-nav="home" href="/app.html">Home</a>
     <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
-    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
-    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+    <a class="bn-item" data-nav="mapa" href="/mapa.html">Mapa</a>
+    <a class="bn-item" data-nav="config" href="/config.html">Config</a>
   </nav>
 
   <!-- Guard e email do user -->
