@@ -1,26 +1,35 @@
 /* =========================================================
-   BRsys Agenda — landing.css (Landing V1)
+   Agenda PMS BRsys — landing.css (Landing V1.2)
    darkclean teal • mobile-first • SaaS
    ========================================================= */
 
-/* Reset */
+/* Reset + baseline */
 *,
 *::before,
 *::after { box-sizing: border-box; }
 
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
 body { margin: 0; }
 
 /* Theme */
-:root {
+:root{
   --bg: #070c0c;
-  --panel: rgba(255, 255, 255, 0.04);
+  --panel: rgba(255, 255, 255, 0.045);
+  --panel-2: rgba(255, 255, 255, 0.03);
   --line: rgba(255, 255, 255, 0.10);
+  --line-2: rgba(255, 255, 255, 0.07);
+
   --text: rgba(255, 255, 255, 0.92);
   --muted: rgba(255, 255, 255, 0.70);
+  --muted-2: rgba(255, 255, 255, 0.55);
 
   --brand: #1fe3c0;
   --brand-2: #66f2da;
+  --brand-ink: #00130f;
 
   --shadow-lg: 0 18px 60px rgba(0, 0, 0, 0.45);
   --shadow-md: 0 12px 40px rgba(0, 0, 0, 0.25);
@@ -30,6 +39,13 @@ body { margin: 0; }
   --radius-sm: 12px;
 
   --max: 1120px;
+
+  /* spacing */
+  --pad-x: 18px;
+  --gap: 14px;
+
+  /* focus */
+  --focus: 0 0 0 3px rgba(31, 227, 192, 0.25);
 }
 
 /* Base */
@@ -41,25 +57,40 @@ body{
     radial-gradient(900px 520px at 80% 40%, rgba(102, 242, 218, 0.10), transparent 60%),
     var(--bg);
   color: var(--text);
-  line-height: 1.5;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
 }
 
-.wrap{ max-width: var(--max); margin: 0 auto; padding: 0 18px; }
-.section{ margin: 12px 0 32px; }
+a { color: inherit; }
+
+.wrap{ max-width: var(--max); margin: 0 auto; padding: 0 var(--pad-x); }
+.section{ margin: 12px 0 34px; }
+
+/* Focus visible */
+:where(a, button, input, textarea, select):focus-visible{
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: 12px;
+}
 
 /* Topbar */
 .top{
-  position: sticky; top: 0; z-index: 50;
-  background: rgba(7, 12, 12, 0.65);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(7, 12, 12, 0.72);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--line-2);
 }
 .topbar{
   display:flex;
   align-items:center;
   justify-content: space-between;
   padding: 14px 0;
+  gap: 12px;
 }
+
+/* Brand */
 .brand{
   display:inline-flex;
   align-items:center;
@@ -67,6 +98,7 @@ body{
   color: var(--text);
   text-decoration:none;
   font-weight: 900;
+  letter-spacing: -0.2px;
 }
 .pill{
   font-size: 12px;
@@ -74,36 +106,46 @@ body{
   border-radius: 999px;
   border: 1px solid var(--line);
   color: var(--muted);
+  background: rgba(255,255,255,0.02);
 }
 
 /* Typography */
 h1{
-  font-size: 42px;
-  line-height: 1.05;
+  font-size: clamp(28px, 4.2vw, 44px);
+  line-height: 1.06;
   margin: 0 0 12px;
-  letter-spacing: -0.6px;
+  letter-spacing: -0.7px;
 }
-h2{ font-size: 18px; margin: 0 0 12px; letter-spacing: -0.2px; }
-h3{ font-size: 16px; margin: 0 0 6px; }
+h2{
+  font-size: 18px;
+  margin: 0 0 12px;
+  letter-spacing: -0.2px;
+}
+h3{
+  font-size: 16px;
+  margin: 0 0 6px;
+}
 p{ margin: 0; }
 
 .sub{
   color: var(--muted);
   font-size: 16px;
-  max-width: 60ch;
+  max-width: 62ch;
 }
 
 /* Hero */
 .hero{ padding: 26px 0 10px; }
 .heroCard{
-  background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.25));
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.20)),
+    radial-gradient(700px 240px at 15% 0%, rgba(31, 227, 192, 0.10), transparent 60%);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 26px;
+  padding: clamp(18px, 3.2vw, 28px);
   box-shadow: var(--shadow-lg);
 }
 .kicker{
-  color: rgba(102, 242, 218, 0.85);
+  color: rgba(102, 242, 218, 0.88);
   font-weight: 900;
   font-size: 12px;
   letter-spacing: 0.9px;
@@ -118,46 +160,63 @@ p{ margin: 0; }
   gap: 12px;
   margin-top: 14px;
 }
+
 .btn{
   display:inline-flex;
   align-items:center;
   justify-content:center;
+  min-height: 44px;              /* tap target */
   padding: 12px 18px;
   border-radius: var(--radius-sm);
   background: var(--brand);
-  color: #00130f;
+  color: var(--brand-ink);
   font-weight: 900;
   text-decoration:none;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   box-shadow: var(--shadow-md);
-  transition: transform .15s ease, filter .15s ease;
+  transition: transform .15s ease, filter .15s ease, background .15s ease, border-color .15s ease;
+  will-change: transform;
 }
-.btn:hover{ filter: brightness(1.03); transform: translateY(-1px); }
-.btn:active{ transform: scale(.99); }
+.btn:hover{ filter: brightness(1.04); transform: translateY(-1px); }
+.btn:active{ transform: translateY(0); filter: brightness(0.98); }
+
 .btn.outline{
   background: transparent;
   color: var(--text);
   border: 1px solid var(--line);
   box-shadow: none;
 }
+.btn.outline:hover{
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.16);
+  transform: translateY(-1px);
+}
 
 /* Grid cards */
 .grid{
   display:grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 14px;
+  gap: var(--gap);
   margin: 18px 0 28px;
 }
+
 .card{
   grid-column: span 4;
-  background: var(--panel);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.02));
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 16px;
   box-shadow: var(--shadow-md);
+  transition: transform .15s ease, border-color .15s ease, background .15s ease;
 }
 .card p{ color: var(--muted); font-size: 14px; }
+.card:hover{
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.16);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+}
 
 /* Lists */
 ul{ margin: 0; padding-left: 18px; color: var(--muted); }
@@ -165,7 +224,7 @@ li{ margin: 8px 0; }
 
 /* Note */
 .note{
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 14px 16px;
@@ -177,7 +236,7 @@ li{ margin: 8px 0; }
   padding: 22px 0 40px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--muted-2);
 }
 .mini{
   display:flex;
@@ -189,7 +248,7 @@ li{ margin: 8px 0; }
 .mini a{ color: rgba(255,255,255,.75); text-decoration:none; }
 .mini a:hover{ color: #fff; }
 
-/* WhatsApp FAB (opcional – se você usar no landing.js) */
+/* WhatsApp FAB (opcional – se usar no landing.js) */
 .wa-fab{
   position: fixed;
   right: 16px;
@@ -209,18 +268,24 @@ li{ margin: 8px 0; }
 .wa-fab:hover{ background: rgba(31,227,192,.22); }
 .wa-dot{
   width: 10px; height: 10px;
-  border-radius: 99px;
+  border-radius: 999px;
   background: var(--brand);
   box-shadow: 0 0 0 6px rgba(31,227,192,.18);
 }
 
 /* Responsive */
 @media (max-width: 900px){
-  h1{ font-size: 34px; }
   .card{ grid-column: span 6; }
 }
 @media (max-width: 560px){
-  h1{ font-size: 30px; }
   .heroCard{ padding: 18px; }
   .card{ grid-column: span 12; }
+  .topbar{ padding: 12px 0; }
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce){
+  html{ scroll-behavior: auto; }
+  .btn, .card{ transition: none; }
+  .btn:hover, .card:hover{ transform: none; }
 }
