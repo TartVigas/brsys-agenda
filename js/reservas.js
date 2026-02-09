@@ -1,6 +1,13 @@
 import { supabase } from "/js/supabase.js";
 import { requireAuth } from "/js/auth.js";
 
+/* =========================================================
+   Reservas — Agenda PMS BRsys (V1.9)
+   - Carrega reservas SEM join (mais robusto)
+   - Carrega quartos em 2ª query (por IDs)
+   - Debug opcional: ?debug=1
+   ========================================================= */
+
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -16,10 +23,21 @@ let USER = null;
 let ALL = [];
 let FILTER = "all"; // all | today | future | past
 
+const DEBUG = new URLSearchParams(location.search).get("debug") === "1";
+
 function show(which) {
   if (elLoading) elLoading.style.display = which === "loading" ? "" : "none";
   if (elEmpty) elEmpty.style.display = which === "empty" ? "" : "none";
   if (elListWrap) elListWrap.style.display = which === "list" ? "" : "none";
+}
+
+function setMsg(text = "", type = "info") {
+  if (!elMsg) return;
+  elMsg.textContent = text || "";
+  elMsg.style.color =
+    type === "error" ? "rgba(255,120,120,.92)" :
+    type === "ok" ? "rgba(120,255,200,.92)" :
+    "rgba(255,255,255,.75)";
 }
 
 function pad2(n){ return String(n).padStart(2,"0"); }
@@ -39,7 +57,7 @@ function normalizePhoneBR(raw) {
   const s = String(raw || "").replace(/\D/g, "");
   if (!s) return "";
   if (s.startsWith("55")) return s;
-  if (s.length === 10 || s.length === 11) return `55${s}`; // DDD+numero
+  if (s.length === 10 || s.length === 11) return `55${s}`;
   return s;
 }
 
@@ -54,7 +72,7 @@ function escapeHtml(str) {
 
 /**
  * status lógico para filtro e pill
- * - today: checkin==hoje OR checkout==hoje OR (checkin<hoje && checkout>hoje)  -> "Hoje/Em andamento" (aqui usamos today pra dar prioridade)
+ * - today: checkin==hoje OR checkout==hoje OR (checkin<hoje && checkout>hoje)
  * - future: checkin>hoje
  * - past: checkout<hoje OR status encerrada
  */
@@ -63,19 +81,17 @@ function statusFrom(r) {
   if (stDb.includes("encerr")) return { key: "past", label: "Encerrada" };
 
   const t = todayISO();
+
+  // suporte a nomes alternativos
   const ci = r.checkin || r.checkin_date || "";
   const co = r.checkout || r.checkout_date || "";
 
-  // Se estiver rolando (entre datas) ou bate em hoje
   if ((ci && ci === t) || (co && co === t) || (ci && co && ci < t && co > t)) {
-    // diferencia label
     if (ci < t && co > t) return { key: "today", label: "Em andamento" };
     return { key: "today", label: "Hoje" };
   }
 
   if (ci && ci > t) return { key: "future", label: "Futura" };
-
-  // fallback: se checkout já passou
   if (co && co < t) return { key: "past", label: "Passada" };
 
   return { key: "all", label: "Ativa" };
@@ -101,7 +117,7 @@ function buildCard(r) {
   const co = r.checkout || r.checkout_date || "";
 
   const st = statusFrom(r);
-  const room = roomLabel(r.agenda_quartos || r.quarto || r.quartos);
+  const room = roomLabel(r._quartoObj); // <- injetado no enrich
 
   const notes = (r.observacoes || r.notes || "").trim();
 
@@ -135,7 +151,6 @@ function buildCard(r) {
     </div>
   `;
 
-  // Clique no card abre (mas não interfere nos links)
   const open = () => (window.location.href = `/reserva.html?id=${encodeURIComponent(r.id)}`);
   card.addEventListener("click", (e) => {
     if (e.target && e.target.closest && e.target.closest("a")) return;
@@ -154,7 +169,6 @@ function buildCard(r) {
 function applyUIActiveFilterButtons() {
   $$("button[data-filter]").forEach((b) => {
     const v = b.getAttribute("data-filter");
-    // mantém teu visual: troca outline -> primary no ativo
     if (v === FILTER) {
       b.classList.remove("outline");
       if (!b.classList.contains("primary")) b.classList.add("primary");
@@ -167,7 +181,6 @@ function applyUIActiveFilterButtons() {
 
 function filterData(list) {
   const q = (elQ?.value || "").trim().toLowerCase();
-
   let out = list;
 
   if (FILTER !== "all") {
@@ -178,11 +191,11 @@ function filterData(list) {
     out = out.filter((r) => {
       const name = String(r.nome_hospede || r.guest_name || "").toLowerCase();
       const wa = String(r.whatsapp || r.guest_whatsapp || "").toLowerCase();
-      return name.includes(q) || wa.includes(q);
+      const room = String(roomLabel(r._quartoObj) || "").toLowerCase();
+      return name.includes(q) || wa.includes(q) || room.includes(q);
     });
   }
 
-  // Ordenação: hoje/em andamento primeiro, depois futuras, depois passadas
   const weight = { today: 0, future: 1, past: 2, all: 9 };
   out = out.slice().sort((a, b) => {
     const sa = statusFrom(a).key;
@@ -217,23 +230,37 @@ function render() {
   if (elList) elList.innerHTML = "";
 
   if (!list.length) {
-    if (elMsg) elMsg.textContent = "Nada encontrado com esse filtro/busca.";
+    setMsg("Nada encontrado com esse filtro/busca.", "info");
     return;
   } else {
-    if (elMsg) elMsg.textContent = "";
+    setMsg("", "info");
   }
 
   list.forEach((r) => elList.appendChild(buildCard(r)));
 }
 
-async function load() {
-  show("loading");
-  if (elMsg) elMsg.textContent = "";
-  if (elSummary) elSummary.textContent = "Carregando…";
+function logSbError(ctx, error) {
+  if (!error) return;
+  const payload = {
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+    code: error.code,
+  };
+  console.error(`[${ctx}]`, payload);
 
-  // garante auth (tu já tem guard no HTML, mas aqui fica blindado)
-  USER = await requireAuth({ redirectTo: "/entrar.html?next=/reservas.html", renderUserInfo: false });
+  if (DEBUG) {
+    setMsg(
+      `Erro (${ctx}): ${payload.message || "—"} ${payload.code ? `• code=${payload.code}` : ""}`,
+      "error"
+    );
+  }
+}
 
+/* ========= Load (robusto) ========= */
+
+async function loadReservasBase(userId) {
+  // SEM join (evita dor com relacionamento)
   const { data, error } = await supabase
     .from("agenda_reservas")
     .select(`
@@ -246,36 +273,98 @@ async function load() {
       observacoes,
       status,
       quarto_id,
-      updated_at,
-      agenda_quartos:quarto_id (
-        id,
-        codigo,
-        nome
-      )
+      updated_at
     `)
-    .eq("user_id", USER.id)
+    .eq("user_id", userId)
     .order("checkin", { ascending: true });
 
-  if (error) {
-    console.error(error);
-    if (elMsg) elMsg.textContent = "Erro ao carregar reservas.";
-    show("empty");
-    return;
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function loadQuartosMapByIds(userId, quartoIds) {
+  if (!quartoIds?.length) return new Map();
+
+  // busca quartos do user (blindado por user_id)
+  // Ajuste nomes se sua tabela tiver outros campos/nomes.
+  const { data, error } = await supabase
+    .from("agenda_quartos")
+    .select("id,codigo,nome")
+    .eq("user_id", userId)
+    .in("id", quartoIds);
+
+  if (error) throw error;
+
+  const map = new Map();
+  (data || []).forEach((q) => map.set(q.id, q));
+  return map;
+}
+
+async function enrichReservasWithQuartos(userId, reservas) {
+  const ids = Array.from(
+    new Set(reservas.map((r) => r.quarto_id).filter(Boolean))
+  );
+
+  if (!ids.length) {
+    reservas.forEach((r) => (r._quartoObj = null));
+    return reservas;
   }
 
-  ALL = Array.isArray(data) ? data : [];
+  const quartosMap = await loadQuartosMapByIds(userId, ids);
 
-  if (!ALL.length) {
+  reservas.forEach((r) => {
+    r._quartoObj = r.quarto_id ? (quartosMap.get(r.quarto_id) || null) : null;
+  });
+
+  return reservas;
+}
+
+async function load() {
+  show("loading");
+  setMsg("");
+  if (elSummary) elSummary.textContent = "Carregando…";
+
+  try {
+    USER = await requireAuth({
+      redirectTo: "/entrar.html?next=/reservas.html",
+      renderUserInfo: false
+    });
+
+    if (!USER?.id) {
+      setMsg("Sessão inválida. Faça login novamente.", "error");
+      show("empty");
+      return;
+    }
+
+    const reservas = await loadReservasBase(USER.id);
+
+    // sem reservas: empty state
+    if (!reservas.length) {
+      ALL = [];
+      show("empty");
+      if (elSummary) elSummary.textContent = "0 reservas";
+      return;
+    }
+
+    // tenta enriquecer com quartos (se falhar, não derruba o app)
+    try {
+      await enrichReservasWithQuartos(USER.id, reservas);
+    } catch (e) {
+      logSbError("load_quartos", e);
+      reservas.forEach((r) => (r._quartoObj = null));
+    }
+
+    ALL = reservas;
+    render();
+  } catch (e) {
+    logSbError("load_reservas", e);
+    setMsg("Erro ao carregar reservas.", "error");
     show("empty");
-    if (elSummary) elSummary.textContent = "0 reservas";
-    return;
+    if (elSummary) elSummary.textContent = "—";
   }
-
-  render();
 }
 
 function bind() {
-  // filtro
   $$("button[data-filter]").forEach((b) => {
     b.addEventListener("click", () => {
       FILTER = b.getAttribute("data-filter") || "all";
@@ -283,7 +372,6 @@ function bind() {
     });
   });
 
-  // busca
   elQ?.addEventListener("input", () => render());
 }
 
