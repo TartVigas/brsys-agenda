@@ -1,554 +1,532 @@
-// /js/reserva-conta.js — Conta da Reserva (V1)
-// - Lançamentos + Pagamentos vinculados à reserva
-// - Totais: total / pago / saldo + pill status
-// - Botão "Fechar conta / Checkout" (habilita quando saldo <= 0)
-// - DEPENDE do /js/reserva.js setar window.__RESERVA_ID (preferencial)
-//   OU pegar ?id=... da URL
-//
-// Tabelas esperadas (Supabase):
-// - agenda_lancamentos: id, user_id, reserva_id, descricao, valor, tipo, created_at
-// - agenda_pagamentos:  id, user_id, reserva_id, forma, valor, obs, created_at
-// (Se seus nomes/colunas forem diferentes, ajusta aqui no topo)
-//
-// Observação: não altera Supabase/RLS, apenas consome.
+// /js/reserva-conta.js — Conta da Reserva (V1.0 - JOIN SAFE + DAY USE friendly)
+// - Usa 2 tabelas: agenda_lancamentos, agenda_pagamentos
+// - Requer colunas: reserva_id (uuid) em ambas (FK -> agenda_reservas.id)
+// - Totais: Total (lancamentos), Pago (pagamentos), Saldo = Total - Pago
+// - UI: compatível com reserva.html (ids abaixo)
+// - Não derruba a tela se a conta falhar (mostra mensagem)
+// - Contrato WhatsApp e reserva ficam no reserva.js; aqui só conta.
+
+/* =========================================================
+   IDs esperados no HTML (reserva.html):
+   - #contaStatus, #totalLanc, #totalPago, #saldo
+   - #formLanc, #lDesc, #lValor, #lTipo, #listaLanc
+   - #formPag, #pForma, #pValor, #pObs, #listaPag
+   - #contaMsg
+   - #btnFecharConta (opcional: habilita quando saldo <= 0)
+   ========================================================= */
 
 import { supabase } from "/js/supabase.js";
 import { requireAuth } from "/js/auth.js";
 
-(function () {
-  const $ = (s, root = document) => root.querySelector(s);
+const $ = (sel, root = document) => root.querySelector(sel);
 
-  // ---------- binds (HTML ids) ----------
-  const elContaStatus = $("#contaStatus");
-  const elTotalLanc = $("#totalLanc");
-  const elTotalPago = $("#totalPago");
-  const elSaldo = $("#saldo");
-  const elContaMsg = $("#contaMsg");
-  const btnFecharConta = $("#btnFecharConta");
+const elStatus = $("#contaStatus");
+const elTotalLanc = $("#totalLanc");
+const elTotalPago = $("#totalPago");
+const elSaldo = $("#saldo");
+const elListaLanc = $("#listaLanc");
+const elListaPag = $("#listaPag");
+const elMsg = $("#contaMsg");
+const elBtnFechar = $("#btnFecharConta");
 
-  // Forms
-  const formLanc = $("#formLanc");
-  const lDesc = $("#lDesc");
-  const lValor = $("#lValor");
-  const lTipo = $("#lTipo");
-  const listaLanc = $("#listaLanc");
+const formLanc = $("#formLanc");
+const formPag = $("#formPag");
 
-  const formPag = $("#formPag");
-  const pForma = $("#pForma");
-  const pValor = $("#pValor");
-  const pObs = $("#pObs");
-  const listaPag = $("#listaPag");
+// Inputs Lançamentos
+const inLDesc = $("#lDesc");
+const inLValor = $("#lValor");
+const inLTipo = $("#lTipo");
 
-  // PMS buttons (optional, in reserva.html)
-  const btnCheckout = $("#btnCheckout");
-  const btnCheckin = $("#btnCheckin");
+// Inputs Pagamentos
+const inPForma = $("#pForma");
+const inPValor = $("#pValor");
+const inPObs = $("#pObs");
 
-  // ---------- config: table + field names ----------
-  const TB_LANC = "agenda_lancamentos";
-  const TB_PAG = "agenda_pagamentos";
-  const TB_RES = "agenda_reservas";
+const STATE = {
+  user: null,
+  reservaId: null,
+  lancamentos: [],
+  pagamentos: [],
+};
 
-  const COL = {
-    user_id: "user_id",
-    reserva_id: "reserva_id",
-    lanc_desc: "descricao",
-    lanc_valor: "valor",
-    lanc_tipo: "tipo",
-    pag_forma: "forma",
-    pag_valor: "valor",
-    pag_obs: "obs",
-    status: "status",
-    updated_at: "updated_at",
-  };
+function setPill(text, tone = "info") {
+  if (!elStatus) return;
+  elStatus.textContent = text || "—";
+  elStatus.style.borderColor =
+    tone === "error" ? "rgba(255,120,120,.35)" :
+    tone === "ok" ? "rgba(102,242,218,.35)" :
+    "rgba(255,255,255,.18)";
+  elStatus.style.color =
+    tone === "error" ? "rgba(255,120,120,.92)" :
+    tone === "ok" ? "rgba(102,242,218,.95)" :
+    "rgba(255,255,255,.78)";
+}
 
-  // ---------- state ----------
-  let USER = null;
-  let RESERVA_ID = null;
+function setMsg(text = "", tone = "info") {
+  if (!elMsg) return;
+  elMsg.textContent = text || "";
+  elMsg.style.color =
+    tone === "error" ? "rgba(255,120,120,.92)" :
+    tone === "ok" ? "rgba(102,242,218,.95)" :
+    "rgba(255,255,255,.70)";
+}
 
-  let LANC = [];
-  let PAGS = [];
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-  // ---------- utils ----------
-  function setMsg(text = "", type = "info") {
-    if (!elContaMsg) return;
-    elContaMsg.textContent = text || "";
-    elContaMsg.style.color =
-      type === "error"
-        ? "rgba(255,120,120,.95)"
-        : type === "ok"
-        ? "rgba(102,242,218,.95)"
-        : "rgba(255,255,255,.70)";
+function onlyDigits(s = "") {
+  return String(s || "").replace(/[^\d]/g, "");
+}
+
+/** aceita "180,00" "180.00" "180" "R$ 180,00" */
+function parseMoneyBR(v) {
+  const raw = String(v ?? "").trim();
+  if (!raw) return NaN;
+
+  // remove tudo que não for dígito, ponto, vírgula, sinal
+  let s = raw.replace(/[^\d,.\-]/g, "");
+
+  // Se tiver vírgula e ponto, assume que ponto é milhar e vírgula é decimal
+  if (s.includes(",") && s.includes(".")) {
+    s = s.replaceAll(".", "").replace(",", ".");
+  } else if (s.includes(",")) {
+    // só vírgula -> decimal
+    s = s.replace(",", ".");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function fmtBRL(n) {
+  const v = Number(n || 0);
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function getReservaIdFromURL() {
+  const url = new URL(window.location.href);
+  return (url.searchParams.get("id") || "").trim();
+}
+
+/* =========================
+   DB ops
+========================= */
+
+async function loadLancamentos(userId, reservaId) {
+  const { data, error } = await supabase
+    .from("agenda_lancamentos")
+    .select("id,reserva_id,descricao,valor,tipo,created_at")
+    .eq("user_id", userId)
+    .eq("reserva_id", reservaId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function loadPagamentos(userId, reservaId) {
+  const { data, error } = await supabase
+    .from("agenda_pagamentos")
+    .select("id,reserva_id,forma,valor,obs,created_at")
+    .eq("user_id", userId)
+    .eq("reserva_id", reservaId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function insertLancamento(userId, reservaId, payload) {
+  const { data, error } = await supabase
+    .from("agenda_lancamentos")
+    .insert({
+      user_id: userId,
+      reserva_id: reservaId,
+      descricao: payload.descricao,
+      valor: payload.valor,
+      tipo: payload.tipo || "extra",
+    })
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data?.id;
+}
+
+async function deleteLancamento(userId, id) {
+  const { error } = await supabase
+    .from("agenda_lancamentos")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+async function insertPagamento(userId, reservaId, payload) {
+  const { data, error } = await supabase
+    .from("agenda_pagamentos")
+    .insert({
+      user_id: userId,
+      reserva_id: reservaId,
+      forma: payload.forma || "pix",
+      valor: payload.valor,
+      obs: payload.obs || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data?.id;
+}
+
+async function deletePagamento(userId, id) {
+  const { error } = await supabase
+    .from("agenda_pagamentos")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", id);
+
+  if (error) throw error;
+}
+
+/* =========================
+   Render
+========================= */
+
+function computeTotals() {
+  const total = STATE.lancamentos.reduce((acc, x) => acc + Number(x.valor || 0), 0);
+  const pago = STATE.pagamentos.reduce((acc, x) => acc + Number(x.valor || 0), 0);
+  const saldo = total - pago;
+  return { total, pago, saldo };
+}
+
+function renderTotals() {
+  const { total, pago, saldo } = computeTotals();
+
+  if (elTotalLanc) elTotalLanc.textContent = fmtBRL(total);
+  if (elTotalPago) elTotalPago.textContent = fmtBRL(pago);
+  if (elSaldo) elSaldo.textContent = fmtBRL(saldo);
+
+  // botão "Fechar conta" só quando saldo <= 0 e existe checkout/checkin fora daqui
+  if (elBtnFechar) {
+    const ok = saldo <= 0.0000001 && (STATE.lancamentos.length || STATE.pagamentos.length);
+    elBtnFechar.disabled = !ok;
+    elBtnFechar.style.opacity = ok ? "1" : ".55";
   }
 
-  function setPill(el, label, type = "info") {
-    if (!el) return;
-    el.textContent = label;
-    el.style.display = "";
-    el.style.border = "1px solid rgba(255,255,255,.12)";
-    el.style.borderRadius = "999px";
-    el.style.padding = "6px 10px";
-    el.style.fontSize = "12px";
-    el.style.fontWeight = "900";
+  if (saldo <= 0.0000001 && (STATE.lancamentos.length || STATE.pagamentos.length)) {
+    setPill("Quitada", "ok");
+  } else if ((STATE.lancamentos.length || STATE.pagamentos.length)) {
+    setPill("Em aberto", "info");
+  } else {
+    setPill("Sem movimentos", "info");
+  }
+}
 
-    if (type === "ok") {
-      el.style.color = "rgba(102,242,218,.98)";
-      el.style.background = "rgba(102,242,218,.08)";
-      return;
-    }
-    if (type === "warn") {
-      el.style.color = "rgba(255,210,120,.98)";
-      el.style.background = "rgba(255,210,120,.08)";
-      return;
-    }
-    if (type === "error") {
-      el.style.color = "rgba(255,120,120,.98)";
-      el.style.background = "rgba(255,120,120,.08)";
-      return;
-    }
-    el.style.color = "rgba(255,255,255,.80)";
-    el.style.background = "rgba(255,255,255,.06)";
+function renderLancamentos() {
+  if (!elListaLanc) return;
+
+  const items = STATE.lancamentos;
+  if (!items.length) {
+    elListaLanc.innerHTML = `<div class="muted small">Nenhum lançamento.</div>`;
+    return;
   }
 
-  function onlyDigits(v = "") {
-    return String(v).replace(/\D/g, "");
-  }
-
-  function parseBRL(v) {
-    // aceita: "180", "180.50", "180,50", "R$ 180,50"
-    const raw = String(v ?? "").trim();
-    if (!raw) return NaN;
-
-    // remove currency/space
-    let s = raw.replace(/[R$\s]/g, "");
-
-    // se vier no padrão BR: 1.234,56 -> 1234.56
-    // remove pontos de milhar, troca vírgula por ponto
-    if (s.includes(",") && s.includes(".")) {
-      s = s.replace(/\./g, "").replace(",", ".");
-    } else if (s.includes(",")) {
-      s = s.replace(",", ".");
-    }
-
-    const n = Number(s);
-    return Number.isFinite(n) ? n : NaN;
-  }
-
-  function moneyBRL(n) {
-    const v = Number(n);
-    if (!Number.isFinite(v)) return "R$ 0,00";
-    return v.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-      minimumFractionDigits: 2,
-    });
-  }
-
-  function isoToBR(iso) {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  function escapeHtml(str) {
-    return String(str ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  function sumValues(list, colName) {
-    return (list || []).reduce((acc, it) => {
-      const n = Number(it?.[colName]);
-      return acc + (Number.isFinite(n) ? n : 0);
-    }, 0);
-  }
-
-  function getReservaIdFromUrl() {
-    const u = new URL(window.location.href);
-    return u.searchParams.get("id");
-  }
-
-  // ---------- render ----------
-  function renderTotals() {
-    const total = sumValues(LANC, COL.lanc_valor);
-    const pago = sumValues(PAGS, COL.pag_valor);
-    const saldo = total - pago;
-
-    if (elTotalLanc) elTotalLanc.textContent = moneyBRL(total);
-    if (elTotalPago) elTotalPago.textContent = moneyBRL(pago);
-    if (elSaldo) elSaldo.textContent = moneyBRL(saldo);
-
-    // status pill
-    if (saldo <= 0 && total > 0) {
-      setPill(elContaStatus, "Quitada", "ok");
-    } else if (total <= 0) {
-      setPill(elContaStatus, "Sem lançamentos", "info");
-    } else if (saldo > 0) {
-      setPill(elContaStatus, "Em aberto", "warn");
-    } else {
-      setPill(elContaStatus, "OK", "ok");
-    }
-
-    // botão fechar conta
-    if (btnFecharConta) {
-      const canClose = total > 0 && saldo <= 0;
-      btnFecharConta.disabled = !canClose;
-      btnFecharConta.style.opacity = canClose ? "1" : ".55";
-      btnFecharConta.title = canClose
-        ? "Fechar conta e fazer checkout"
-        : "Registre lançamentos e pagamentos para liberar o checkout.";
-    }
-
-    return { total, pago, saldo };
-  }
-
-  function renderLancamentos() {
-    if (!listaLanc) return;
-
-    if (!LANC.length) {
-      listaLanc.innerHTML = `<div class="muted small">Nenhum lançamento ainda.</div>`;
-      return;
-    }
-
-    listaLanc.innerHTML = LANC.map((l) => {
-      const id = l.id;
-      const desc = escapeHtml(l[COL.lanc_desc] || "—");
-      const tipo = escapeHtml(l[COL.lanc_tipo] || "—");
-      const valor = moneyBRL(l[COL.lanc_valor]);
-      const dt = isoToBR(l.created_at);
+  elListaLanc.innerHTML = items
+    .map((x) => {
+      const desc = escapeHtml(x.descricao || "—");
+      const tipo = escapeHtml(x.tipo || "extra");
+      const valor = fmtBRL(Number(x.valor || 0));
 
       return `
-        <div class="list-item" data-lanc-id="${escapeHtml(id)}">
-          <div class="row" style="margin:0;gap:10px;flex-wrap:wrap;align-items:flex-start;">
-            <div style="min-width:200px;flex:1;">
-              <div style="font-weight:900;">${desc}</div>
-              <div class="muted small" style="margin-top:6px;">
-                <span class="pill" style="padding:5px 9px;border-color:rgba(255,255,255,.10);">${tipo}</span>
-                <span style="opacity:.6"> • </span>
-                <span class="mono">${escapeHtml(dt)}</span>
-              </div>
+        <div class="card" style="padding:12px;margin-top:10px;">
+          <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div class="small"><strong>${desc}</strong></div>
+              <div class="muted small">Tipo: <span class="mono">${tipo}</span></div>
             </div>
-
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div style="font-weight:900;">${escapeHtml(valor)}</div>
-              <button class="btn outline small" data-act="del-lanc" data-id="${escapeHtml(id)}" type="button">Remover</button>
+            <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+              <div class="h2" style="font-size:16px;margin:0;">${valor}</div>
+              <button class="btn outline small" type="button" data-del-lanc="${escapeHtml(x.id)}">Remover</button>
             </div>
           </div>
         </div>
       `;
-    }).join("");
+    })
+    .join("");
+
+  elListaLanc.querySelectorAll("[data-del-lanc]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-del-lanc");
+      if (!id) return;
+      if (!confirm("Remover este lançamento?")) return;
+
+      try {
+        btn.disabled = true;
+        await deleteLancamento(STATE.user.id, id);
+        await refresh();
+        setMsg("Lançamento removido.", "ok");
+      } catch (e) {
+        console.error("[conta] delete lancamento:", e);
+        setMsg("Erro ao remover lançamento.", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function renderPagamentos() {
+  if (!elListaPag) return;
+
+  const items = STATE.pagamentos;
+  if (!items.length) {
+    elListaPag.innerHTML = `<div class="muted small">Nenhum pagamento.</div>`;
+    return;
   }
 
-  function renderPagamentos() {
-    if (!listaPag) return;
-
-    if (!PAGS.length) {
-      listaPag.innerHTML = `<div class="muted small">Nenhum pagamento ainda.</div>`;
-      return;
-    }
-
-    listaPag.innerHTML = PAGS.map((p) => {
-      const id = p.id;
-      const forma = escapeHtml(p[COL.pag_forma] || "—");
-      const valor = moneyBRL(p[COL.pag_valor]);
-      const obs = escapeHtml(p[COL.pag_obs] || "");
-      const dt = isoToBR(p.created_at);
+  elListaPag.innerHTML = items
+    .map((x) => {
+      const forma = escapeHtml(x.forma || "pix");
+      const obs = escapeHtml(x.obs || "");
+      const valor = fmtBRL(Number(x.valor || 0));
 
       return `
-        <div class="list-item" data-pag-id="${escapeHtml(id)}">
-          <div class="row" style="margin:0;gap:10px;flex-wrap:wrap;align-items:flex-start;">
-            <div style="min-width:200px;flex:1;">
-              <div style="font-weight:900;">${forma.toUpperCase()}</div>
-              <div class="muted small" style="margin-top:6px;">
-                <span class="mono">${escapeHtml(dt)}</span>
-                ${obs ? `<span style="opacity:.6"> • </span><span>${obs}</span>` : ""}
-              </div>
+        <div class="card" style="padding:12px;margin-top:10px;">
+          <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div>
+              <div class="small"><strong>${forma.toUpperCase()}</strong></div>
+              ${obs ? `<div class="muted small">${obs}</div>` : `<div class="muted small">—</div>`}
             </div>
-
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div style="font-weight:900;">${escapeHtml(valor)}</div>
-              <button class="btn outline small" data-act="del-pag" data-id="${escapeHtml(id)}" type="button">Remover</button>
+            <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+              <div class="h2" style="font-size:16px;margin:0;">${valor}</div>
+              <button class="btn outline small" type="button" data-del-pag="${escapeHtml(x.id)}">Remover</button>
             </div>
           </div>
         </div>
       `;
-    }).join("");
-  }
+    })
+    .join("");
 
-  function renderAll() {
-    renderLancamentos();
-    renderPagamentos();
-    renderTotals();
-  }
+  elListaPag.querySelectorAll("[data-del-pag]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-del-pag");
+      if (!id) return;
+      if (!confirm("Remover este pagamento?")) return;
 
-  // ---------- data load ----------
-  async function loadAll() {
-    setMsg("Carregando conta…", "info");
+      try {
+        btn.disabled = true;
+        await deletePagamento(STATE.user.id, id);
+        await refresh();
+        setMsg("Pagamento removido.", "ok");
+      } catch (e) {
+        console.error("[conta] delete pagamento:", e);
+        setMsg("Erro ao remover pagamento.", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+}
 
-    // lançamentos
-    const qLanc = supabase
-      .from(TB_LANC)
-      .select("id, created_at, descricao, valor, tipo, reserva_id, user_id")
-      .eq(COL.user_id, USER.id)
-      .eq(COL.reserva_id, RESERVA_ID)
-      .order("created_at", { ascending: false });
+function renderAll() {
+  renderTotals();
+  renderLancamentos();
+  renderPagamentos();
+}
 
-    const qPag = supabase
-      .from(TB_PAG)
-      .select("id, created_at, forma, valor, obs, reserva_id, user_id")
-      .eq(COL.user_id, USER.id)
-      .eq(COL.reserva_id, RESERVA_ID)
-      .order("created_at", { ascending: false });
+/* =========================
+   Refresh (load both)
+========================= */
+async function refresh() {
+  if (!STATE.user?.id || !STATE.reservaId) return;
 
-    const [{ data: dl, error: el }, { data: dp, error: ep }] = await Promise.all([qLanc, qPag]);
+  try {
+    const [lanc, pag] = await Promise.all([
+      loadLancamentos(STATE.user.id, STATE.reservaId),
+      loadPagamentos(STATE.user.id, STATE.reservaId),
+    ]);
 
-    if (el || ep) {
-      console.error("[reserva-conta] load error", el || ep);
-      setMsg("Erro ao carregar conta. Verifique RLS/tabelas.", "error");
-      return;
-    }
+    STATE.lancamentos = lanc;
+    STATE.pagamentos = pag;
 
-    LANC = Array.isArray(dl) ? dl : [];
-    PAGS = Array.isArray(dp) ? dp : [];
-
-    setMsg("");
     renderAll();
+  } catch (e) {
+    console.error("[conta] refresh error:", e);
+    // Erro típico: coluna reserva_id não existe => orientar sem derrubar
+    const msg = String(e?.message || "").toLowerCase();
+    if (msg.includes("reserva_id") && msg.includes("does not exist")) {
+      setMsg("Banco ainda sem vínculo da conta com a reserva (reserva_id). Crie a coluna no Supabase.", "error");
+      setPill("Indisponível", "error");
+    } else {
+      setMsg("Não foi possível carregar a conta agora.", "error");
+      setPill("Erro", "error");
+    }
   }
+}
 
-  // ---------- actions ----------
-  async function addLancamento() {
-    const desc = String(lDesc?.value || "").trim();
-    const tipo = String(lTipo?.value || "extra").trim();
-    const valor = parseBRL(lValor?.value);
+/* =========================
+   Bind forms
+========================= */
+function bindLancForm() {
+  if (!formLanc) return;
 
-    if (!desc) return setMsg("Informe a descrição do lançamento.", "error");
-    if (!Number.isFinite(valor) || valor <= 0) return setMsg("Informe um valor válido (ex: 180,00).", "error");
+  // opcional: máscara simples no input de valor
+  inLValor?.addEventListener("input", () => {
+    // deixa o usuário digitar, só limpa caracteres muito estranhos
+    inLValor.value = String(inLValor.value || "").replace(/[^\d,.\-]/g, "");
+  });
 
-    setMsg("Adicionando lançamento…", "info");
+  formLanc.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!STATE.user?.id || !STATE.reservaId) return;
 
-    const payload = {
-      [COL.user_id]: USER.id,
-      [COL.reserva_id]: RESERVA_ID,
-      [COL.lanc_desc]: desc,
-      [COL.lanc_valor]: valor,
-      [COL.lanc_tipo]: tipo,
-    };
+    const desc = (inLDesc?.value || "").trim();
+    const tipo = (inLTipo?.value || "extra").trim();
+    const valorNum = parseMoneyBR(inLValor?.value || "");
 
-    const { error } = await supabase.from(TB_LANC).insert(payload);
-
-    if (error) {
-      console.error("[reserva-conta] add lanc error", error);
-      setMsg("Erro ao adicionar lançamento. Verifique tabela/RLS.", "error");
+    if (!desc) {
+      setMsg("Informe a descrição do lançamento.", "error");
+      inLDesc?.focus();
+      return;
+    }
+    if (!Number.isFinite(valorNum) || valorNum <= 0) {
+      setMsg("Valor inválido (use ex: 180,00).", "error");
+      inLValor?.focus();
       return;
     }
 
-    // limpa form
-    if (lDesc) lDesc.value = "";
-    if (lValor) lValor.value = "";
-    if (lTipo) lTipo.value = "extra";
-
-    setMsg("Lançamento adicionado ✅", "ok");
-    await loadAll();
-  }
-
-  async function addPagamento() {
-    const forma = String(pForma?.value || "pix").trim();
-    const valor = parseBRL(pValor?.value);
-    const obs = String(pObs?.value || "").trim();
-
-    if (!Number.isFinite(valor) || valor <= 0) return setMsg("Informe um valor válido (ex: 180,00).", "error");
-
-    setMsg("Registrando pagamento…", "info");
-
-    const payload = {
-      [COL.user_id]: USER.id,
-      [COL.reserva_id]: RESERVA_ID,
-      [COL.pag_forma]: forma,
-      [COL.pag_valor]: valor,
-      [COL.pag_obs]: obs || null,
-    };
-
-    const { error } = await supabase.from(TB_PAG).insert(payload);
-
-    if (error) {
-      console.error("[reserva-conta] add pag error", error);
-      setMsg("Erro ao registrar pagamento. Verifique tabela/RLS.", "error");
-      return;
-    }
-
-    // limpa form
-    if (pValor) pValor.value = "";
-    if (pObs) pObs.value = "";
-
-    setMsg("Pagamento registrado ✅", "ok");
-    await loadAll();
-  }
-
-  async function delLancamento(id) {
-    const ok = confirm("Remover este lançamento?");
-    if (!ok) return;
-
-    setMsg("Removendo lançamento…", "info");
-
-    const { error } = await supabase
-      .from(TB_LANC)
-      .delete()
-      .eq("id", id)
-      .eq(COL.user_id, USER.id)
-      .eq(COL.reserva_id, RESERVA_ID);
-
-    if (error) {
-      console.error("[reserva-conta] del lanc error", error);
-      setMsg("Erro ao remover lançamento.", "error");
-      return;
-    }
-
-    setMsg("Lançamento removido ✅", "ok");
-    await loadAll();
-  }
-
-  async function delPagamento(id) {
-    const ok = confirm("Remover este pagamento?");
-    if (!ok) return;
-
-    setMsg("Removendo pagamento…", "info");
-
-    const { error } = await supabase
-      .from(TB_PAG)
-      .delete()
-      .eq("id", id)
-      .eq(COL.user_id, USER.id)
-      .eq(COL.reserva_id, RESERVA_ID);
-
-    if (error) {
-      console.error("[reserva-conta] del pag error", error);
-      setMsg("Erro ao remover pagamento.", "error");
-      return;
-    }
-
-    setMsg("Pagamento removido ✅", "ok");
-    await loadAll();
-  }
-
-  async function doCheckout() {
-    const totals = renderTotals();
-    if (!(totals.total > 0 && totals.saldo <= 0)) {
-      setMsg("A conta precisa estar quitada para fazer checkout.", "error");
-      return;
-    }
-
-    const ok = confirm("Fechar conta e fazer checkout desta reserva?");
-    if (!ok) return;
-
-    setMsg("Fazendo checkout…", "info");
-
-    // OBS: status precisa existir no CHECK constraint do seu DB
-    // Se seu constraint não aceitar "finalizado", troque por um status válido (ex: "encerrada")
-    const nextStatus = "finalizado";
-
-    const { error } = await supabase
-      .from(TB_RES)
-      .update({ [COL.status]: nextStatus, [COL.updated_at]: new Date().toISOString() })
-      .eq("id", RESERVA_ID)
-      .eq(COL.user_id, USER.id);
-
-    if (error) {
-      console.error("[reserva-conta] checkout error", error);
-      setMsg("Erro ao fazer checkout. Verifique status permitido no DB.", "error");
-      return;
-    }
-
-    setMsg("Checkout feito ✅", "ok");
-
-    // se tiver botão checkout na reserva, força refresh visual (opcional)
     try {
-      btnCheckout?.click?.();
-    } catch (e) {}
+      setMsg("Salvando lançamento…", "info");
+      const btn = formLanc.querySelector("button[type='submit']");
+      if (btn) btn.disabled = true;
 
-    // volta pra reservas ou mapa (você escolhe)
-    setTimeout(() => {
-      window.location.href = "/reservas.html";
-    }, 600);
-  }
+      await insertLancamento(STATE.user.id, STATE.reservaId, {
+        descricao: desc,
+        tipo,
+        valor: valorNum,
+      });
 
-  // ---------- bind events ----------
-  function bindEvents() {
-    formLanc?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      await addLancamento();
-    });
+      if (inLDesc) inLDesc.value = "";
+      if (inLValor) inLValor.value = "";
 
-    formPag?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      await addPagamento();
-    });
+      await refresh();
+      setMsg("Lançamento adicionado ✅", "ok");
+    } catch (err) {
+      console.error("[conta] insertLancamento:", err);
+      setMsg("Erro ao adicionar lançamento.", "error");
+    } finally {
+      const btn = formLanc.querySelector("button[type='submit']");
+      if (btn) btn.disabled = false;
+    }
+  });
+}
 
-    // delegation remove
-    listaLanc?.addEventListener("click", async (e) => {
-      const b = e.target?.closest?.("button[data-act='del-lanc']");
-      if (!b) return;
-      const id = b.getAttribute("data-id");
-      if (id) await delLancamento(id);
-    });
+function bindPagForm() {
+  if (!formPag) return;
 
-    listaPag?.addEventListener("click", async (e) => {
-      const b = e.target?.closest?.("button[data-act='del-pag']");
-      if (!b) return;
-      const id = b.getAttribute("data-id");
-      if (id) await delPagamento(id);
-    });
+  inPValor?.addEventListener("input", () => {
+    inPValor.value = String(inPValor.value || "").replace(/[^\d,.\-]/g, "");
+  });
 
-    btnFecharConta?.addEventListener("click", async () => {
-      await doCheckout();
-    });
+  formPag.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!STATE.user?.id || !STATE.reservaId) return;
 
-    // UX: Enter no valor adiciona
-    lValor?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        formLanc?.requestSubmit?.();
-      }
-    });
-    pValor?.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        formPag?.requestSubmit?.();
-      }
-    });
-  }
+    const forma = (inPForma?.value || "pix").trim();
+    const valorNum = parseMoneyBR(inPValor?.value || "");
+    const obs = (inPObs?.value || "").trim();
 
-  // ---------- boot ----------
-  (async function boot() {
-    // se a página não tiver os elementos, não faz nada
-    if (!elTotalLanc && !formLanc && !formPag) return;
+    if (!Number.isFinite(valorNum) || valorNum <= 0) {
+      setMsg("Valor inválido (use ex: 180,00).", "error");
+      inPValor?.focus();
+      return;
+    }
 
-    USER = await requireAuth({
-      redirectTo: "/entrar.html?next=/reserva.html",
+    try {
+      setMsg("Registrando pagamento…", "info");
+      const btn = formPag.querySelector("button[type='submit']");
+      if (btn) btn.disabled = true;
+
+      await insertPagamento(STATE.user.id, STATE.reservaId, {
+        forma,
+        valor: valorNum,
+        obs: obs || null,
+      });
+
+      if (inPValor) inPValor.value = "";
+      if (inPObs) inPObs.value = "";
+
+      await refresh();
+      setMsg("Pagamento registrado ✅", "ok");
+    } catch (err) {
+      console.error("[conta] insertPagamento:", err);
+      setMsg("Erro ao registrar pagamento.", "error");
+    } finally {
+      const btn = formPag.querySelector("button[type='submit']");
+      if (btn) btn.disabled = false;
+    }
+  });
+}
+
+/* =========================
+   Fechar conta (só UI)
+   - Aqui NÃO faz checkout automaticamente (isso é no reserva.js)
+   - Só habilita e mostra mensagem para você usar no fluxo.
+========================= */
+function bindFecharConta() {
+  if (!elBtnFechar) return;
+
+  elBtnFechar.addEventListener("click", () => {
+    const { saldo } = computeTotals();
+    if (saldo > 0.0000001) {
+      setMsg("Ainda existe saldo em aberto.", "error");
+      return;
+    }
+    setMsg("Conta quitada ✅ Agora você pode fazer o Checkout no topo.", "ok");
+  });
+}
+
+/* =========================
+   Boot
+========================= */
+(async function boot() {
+  try {
+    // garante sessão (não renderiza userbox; isso fica no seu HTML guard)
+    const user = await requireAuth({
+      redirectTo: `/entrar.html?next=${encodeURIComponent(location.pathname + location.search)}`,
       renderUserInfo: false,
     });
 
-    if (!USER) return;
+    if (!user?.id) return;
 
-    // pega reservaId:
-    // 1) window.__RESERVA_ID (se /js/reserva.js setar)
-    // 2) querystring ?id=
-    RESERVA_ID = window.__RESERVA_ID || getReservaIdFromUrl();
-
-    if (!RESERVA_ID) {
-      setMsg("Reserva inválida (sem id).", "error");
+    const reservaId = getReservaIdFromURL();
+    if (!reservaId) {
+      setPill("Sem reserva", "error");
+      setMsg("URL sem parâmetro ?id= (reserva).", "error");
       return;
     }
 
-    bindEvents();
-    await loadAll();
-  })();
+    STATE.user = user;
+    STATE.reservaId = reservaId;
+
+    setPill("Carregando…", "info");
+    setMsg("");
+
+    bindLancForm();
+    bindPagForm();
+    bindFecharConta();
+
+    await refresh();
+  } catch (e) {
+    console.error("[conta] boot error:", e);
+    setPill("Erro", "error");
+    setMsg("Falha ao iniciar a Conta.", "error");
+  }
 })();
