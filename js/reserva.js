@@ -1,12 +1,13 @@
-// /js/reserva.js — Detalhe/Edição da reserva (V1.6 - DAY USE + PMS actions)
-// Compatível com /reserva.html (ids do HTML)
-// - Carrega reserva por ?id=UUID
+// /js/reserva.js — Detalhe/Edição da reserva (V1.7 - DAY USE + STATUS SAFE)
+// Compatível com reserva.html (ids do HTML)
+// - Carrega por ?id=UUID
 // - DAY USE: permite checkin == checkout
-// - Status pill + ações: Check-in / Checkout / Cancelar (atualiza coluna "status")
-// - WhatsApp button (wa.me) com normalização BR
-// - Salvar alterações habilita só quando muda algo
-// - Exclusão com confirmação
-// - Sem JOIN (robusto). Se quiser mostrar quarto, deixe para a tela Mapa/Reservas.
+// - Ações PMS: check-in / checkout / cancelar (status compatível com constraint)
+//   -> checkin:    status='hospedado'
+//   -> checkout:   status='finalizado'
+//   -> cancelar:   status='cancelado'
+// - Salvar só habilita quando houver mudanças + validação ok
+// - Sem JOIN (robusto)
 
 import { supabase } from "/js/supabase.js";
 import { requireAuth } from "/js/auth.js";
@@ -45,8 +46,6 @@ const btnCancelar = $("btnCancelar");
    Config
 ========================= */
 const TABLE = "agenda_reservas";
-
-// Campos mínimos (mantém robusto)
 const FIELDS = `
   id,
   user_id,
@@ -66,11 +65,11 @@ const FIELDS = `
 ========================= */
 let USER = null;
 let RES_ID = null;
-let ROW = null;        // dado atual
-let SNAPSHOT = null;   // para detectar mudanças
+let ROW = null;
+let SNAPSHOT = null;
 
 /* =========================
-   Helpers
+   UI helpers
 ========================= */
 function show(which) {
   if (elLoading) elLoading.style.display = which === "loading" ? "" : "none";
@@ -125,7 +124,6 @@ function normalizePhoneTo55(raw) {
 function waLink(rawPhone) {
   const phone55 = normalizePhoneTo55(rawPhone);
   if (!phone55) return "";
-  // mínimo razoável: 55 + DDD + numero
   if (phone55.length < 12) return "";
   return `https://wa.me/${phone55}`;
 }
@@ -142,70 +140,68 @@ function escapeHtml(str) {
 /* =========================
    Status (DAY USE)
 ========================= */
-/**
- * Regras:
- * - past:
- *   - status DB cancel/final/encerr OR checkout < hoje
- * - today:
- *   - checkin == hoje (inclui day-use checkin==checkout==hoje)
- *   - OR (checkin < hoje AND checkout >= hoje) -> em andamento
- * - future:
- *   - checkin > hoje
- */
+// alinhado com teu DB real: reserved / hospedado / finalizado / cancelado
+function statusLabel(db) {
+  const s = String(db || "").toLowerCase();
+  if (s === "reserved") return "Reservada";
+  if (s === "hospedado") return "Hospedado";
+  if (s === "finalizado") return "Finalizado";
+  if (s === "cancelado") return "Cancelado";
+  return s ? s : "—";
+}
+
 function statusFrom(r) {
   const stDb = String(r?.status || "").toLowerCase();
-  if (stDb.includes("cancel")) return { key: "past", label: "Cancelada" };
-  if (stDb.includes("final"))  return { key: "past", label: "Finalizada" };
-  if (stDb.includes("encerr")) return { key: "past", label: "Encerrada" };
-
   const t = todayISO();
   const ci = String(r?.checkin || "");
   const co = String(r?.checkout || "");
 
+  if (stDb === "cancelado") return { key: "past", label: "Cancelado" };
+  if (stDb === "finalizado") return { key: "past", label: "Finalizado" };
+
+  // FUTURA
   if (ci && ci > t) return { key: "future", label: "Futura" };
 
+  // HOJE (inclui day-use)
   if (ci && ci === t) return { key: "today", label: "Hoje" };
 
+  // EM ANDAMENTO
   if (ci && co && ci < t && co >= t) return { key: "today", label: "Em andamento" };
 
+  // PASSADA
   if (co && co < t) return { key: "past", label: "Passada" };
 
-  return { key: "all", label: "Ativa" };
+  // fallback
+  return { key: "all", label: statusLabel(stDb) || "Ativa" };
 }
 
 function setStatusUI(r) {
   const st = statusFrom(r);
   if (elPill) elPill.textContent = st.label || "—";
 
-  // hint simples
   const t = todayISO();
   const ci = String(r?.checkin || "");
   const co = String(r?.checkout || "");
+  const db = String(r?.status || "").toLowerCase();
 
   let hint = "";
   if (ci && co && ci === co) hint = "Day use (check-in = check-out).";
-  if (ci === t) hint = hint ? `${hint} Chegada hoje.` : "Chegada hoje.";
-  if (ci < t && co >= t) hint = hint ? `${hint} Em andamento.` : "Em andamento.";
-  if (co === t && ci < t) hint = hint ? `${hint} Saída hoje.` : "Saída hoje.";
+  if (db === "reserved") hint = hint ? `${hint} Reservada.` : "Reservada.";
+  if (db === "hospedado") hint = hint ? `${hint} Hospedado.` : "Hospedado.";
+  if (co === t) hint = hint ? `${hint} Saída hoje.` : "Saída hoje.";
 
   if (elHint) {
     elHint.style.display = hint ? "" : "none";
     elHint.textContent = hint;
   }
 
-  // ações PMS (MVP)
-  const key = st.key;
-
-  // Mostra check-in se: futura ou hoje (ainda não em andamento), e não cancelada/finalizada
-  // Sem "dt efetiva" no DB, a gente usa status + datas como orientação.
-  const canCheckin =
-    key === "future" || (key === "today" && ci === t);
-
-  // Mostra checkout se: em andamento ou hoje (checkout==hoje)
-  const canCheckout =
-    (key === "today" && ci < t && co >= t) || (key === "today" && co === t);
-
-  const canCancel = st.key !== "past";
+  // Botões PMS — regras simples e práticas (MVP)
+  // check-in aparece se status=reserved
+  // checkout aparece se status=hospedado
+  // cancelar aparece se não estiver finalizado/cancelado
+  const canCheckin = db === "reserved";
+  const canCheckout = db === "hospedado";
+  const canCancel = db !== "finalizado" && db !== "cancelado";
 
   if (btnCheckin) btnCheckin.style.display = canCheckin ? "" : "none";
   if (btnCheckout) btnCheckout.style.display = canCheckout ? "" : "none";
@@ -213,7 +209,7 @@ function setStatusUI(r) {
 }
 
 /* =========================
-   Dirty check
+   Dirty check + validation
 ========================= */
 function takeSnapshot() {
   SNAPSHOT = {
@@ -248,6 +244,15 @@ function isDirty() {
   );
 }
 
+function isValidDates() {
+  const ci = (elCheckin?.value || "").trim();
+  const co = (elCheckout?.value || "").trim();
+  if (!ci || !co) return false;
+  // ✅ day-use permitido, só bloqueia co < ci
+  if (co < ci) return false;
+  return true;
+}
+
 function updateSaveEnabled() {
   if (!btnSalvar) return;
   const ok =
@@ -258,20 +263,6 @@ function updateSaveEnabled() {
     isDirty();
 
   btnSalvar.disabled = !ok;
-}
-
-/* =========================
-   Validation (DAY USE)
-========================= */
-function isValidDates() {
-  const ci = (elCheckin?.value || "").trim();
-  const co = (elCheckout?.value || "").trim();
-  if (!ci || !co) return false;
-
-  // DAY USE permitido (co === ci)
-  if (co < ci) return false;
-
-  return true;
 }
 
 /* =========================
@@ -341,7 +332,8 @@ function renderMeta(r) {
     `<strong>ID:</strong> <span class="mono">${escapeHtml(r.id)}</span>`,
     `<strong>Período:</strong> ${escapeHtml(formatDateBR(ci))} → ${escapeHtml(formatDateBR(co))}`,
     `<strong>Tipo:</strong> ${ci && co && ci === co ? "Day use" : "Diária"}`,
-    `<strong>Estado:</strong> ${escapeHtml(st.label)}`
+    `<strong>Status DB:</strong> ${escapeHtml(statusLabel(r.status))}`,
+    `<strong>Visão:</strong> ${escapeHtml(st.label)}`
   ];
 
   elMeta.innerHTML = meta.join(" &nbsp;•&nbsp; ");
@@ -361,12 +353,11 @@ function fillForm(r) {
 }
 
 /* =========================
-   Boot
+   Boot + binds
 ========================= */
 function getIdFromQuery() {
   const sp = new URLSearchParams(location.search);
-  const id = sp.get("id") || "";
-  return id.trim();
+  return (sp.get("id") || "").trim();
 }
 
 function bindInputs() {
@@ -375,7 +366,7 @@ function bindInputs() {
     el.addEventListener("input", () => {
       refreshWhatsBtn();
       updateSaveEnabled();
-      // Atualiza meta/status conforme mexe em datas
+
       if (ROW) {
         const temp = {
           ...ROW,
@@ -393,56 +384,63 @@ function bindInputs() {
 }
 
 function bindActions() {
+  // CHECK-IN -> hospedado
   btnCheckin?.addEventListener("click", async () => {
     try {
       if (!USER?.id || !RES_ID) return;
+      setPmsMsg("Fazendo check-in…");
 
-      // "checkin" (ação): marca status como "em_andamento"
-      setPmsMsg("Aplicando check-in…");
-      const updated = await updateReserva(USER.id, RES_ID, { status: "em_andamento" });
+      const updated = await updateReserva(USER.id, RES_ID, { status: "hospedado" });
       ROW = updated;
       fillForm(ROW);
-      setPmsMsg("Check-in aplicado.", "ok");
+      setPmsMsg("Check-in feito ✅", "ok");
     } catch (e) {
       console.error("[reserva] checkin error:", e);
-      setPmsMsg("Erro ao aplicar check-in.", "error");
+      setPmsMsg("Erro ao fazer check-in (RLS/constraint).", "error");
     }
   });
 
+  // CHECKOUT -> finalizado
   btnCheckout?.addEventListener("click", async () => {
     try {
       if (!USER?.id || !RES_ID) return;
 
-      // "checkout" (ação): marca status como "finalizada"
-      setPmsMsg("Aplicando checkout…");
-      const updated = await updateReserva(USER.id, RES_ID, { status: "finalizada" });
+      const ok = confirm("Fechar / Checkout dessa hospedagem?");
+      if (!ok) return;
+
+      setPmsMsg("Fazendo checkout…");
+
+      const updated = await updateReserva(USER.id, RES_ID, { status: "finalizado" });
       ROW = updated;
       fillForm(ROW);
-      setPmsMsg("Checkout aplicado. Reserva finalizada.", "ok");
+      setPmsMsg("Checkout feito ✅", "ok");
     } catch (e) {
       console.error("[reserva] checkout error:", e);
-      setPmsMsg("Erro ao aplicar checkout.", "error");
+      setPmsMsg("Erro ao fazer checkout (RLS/constraint).", "error");
     }
   });
 
+  // CANCELAR -> cancelado
   btnCancelar?.addEventListener("click", async () => {
     try {
       if (!USER?.id || !RES_ID) return;
 
-      const ok = confirm("Cancelar esta reserva? (Ela ficará como 'Cancelada')"); // MVP
+      const ok = confirm("Cancelar esta reserva? (Ela ficará como 'Cancelado')");
       if (!ok) return;
 
       setPmsMsg("Cancelando…");
-      const updated = await updateReserva(USER.id, RES_ID, { status: "cancelada" });
+
+      const updated = await updateReserva(USER.id, RES_ID, { status: "cancelado" });
       ROW = updated;
       fillForm(ROW);
-      setPmsMsg("Reserva cancelada.", "ok");
+      setPmsMsg("Reserva cancelada ✅", "ok");
     } catch (e) {
       console.error("[reserva] cancel error:", e);
-      setPmsMsg("Erro ao cancelar.", "error");
+      setPmsMsg("Erro ao cancelar (RLS/constraint).", "error");
     }
   });
 
+  // EXCLUIR
   btnExcluir?.addEventListener("click", async () => {
     try {
       if (!USER?.id || !RES_ID) return;
@@ -452,8 +450,6 @@ function bindActions() {
 
       setMsg("Excluindo…");
       await deleteReserva(USER.id, RES_ID);
-
-      // volta pra lista
       window.location.replace("/reservas.html");
     } catch (e) {
       console.error("[reserva] delete error:", e);
@@ -461,7 +457,7 @@ function bindActions() {
     }
   });
 
-  // salvar (form submit)
+  // SALVAR (form submit)
   $("formReserva")?.addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -478,14 +474,13 @@ function bindActions() {
       if (!checkin) { alert("Informe o check-in."); elCheckin?.focus(); return; }
       if (!checkout) { alert("Informe o check-out."); elCheckout?.focus(); return; }
 
-      // DAY USE permitido, mas checkout não pode ser antes
       if (checkout < checkin) { alert("Check-out não pode ser antes do check-in."); elCheckout?.focus(); return; }
 
       setMsg("Salvando…");
 
       const updated = await updateReserva(USER.id, RES_ID, {
         nome_hospede: nome,
-        whatsapp: whatsapp || null,
+        whatsapp: whatsapp ? normalizePhoneTo55(whatsapp) : null, // mantém padrão 55...
         checkin,
         checkout,
         observacoes: obs || null,
@@ -493,7 +488,7 @@ function bindActions() {
 
       ROW = updated;
       fillForm(ROW);
-      setMsg("Salvo com sucesso.", "ok");
+      setMsg("Salvo com sucesso ✅", "ok");
     } catch (err) {
       console.error("[reserva] save error:", err);
       setMsg("Erro ao salvar. Tente novamente.", "error");
@@ -509,7 +504,7 @@ function bindActions() {
 
     USER = await requireAuth({
       redirectTo: "/entrar.html?next=/reserva.html",
-      renderUserInfo: true // preenche hotelBadge/userInfo se existir no layout
+      renderUserInfo: false
     });
 
     RES_ID = getIdFromQuery();
@@ -519,7 +514,6 @@ function bindActions() {
     }
 
     const row = await loadReserva(USER.id, RES_ID);
-
     if (!row) {
       show("notfound");
       return;
@@ -531,8 +525,6 @@ function bindActions() {
     fillForm(ROW);
     bindInputs();
     bindActions();
-
-    // se abriu com #conta, o HTML já faz scroll (ok)
   } catch (err) {
     console.error("[reserva] boot error:", err);
     show("notfound");
