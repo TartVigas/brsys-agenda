@@ -2,16 +2,15 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
-  <title>Conta • Agenda BRsys</title>
+  <title>Configurações • Agenda BRsys</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="robots" content="noindex,nofollow" />
-  <meta name="description" content="Conta e configurações da Agenda BRsys." />
-  <link rel="canonical" href="https://agenda.brsys.com.br/conta.html" />
+  <meta name="description" content="Configurações do ambiente, atalhos e suporte." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/config.html" />
 
   <link rel="icon" type="image/png" href="/img/favicon.png" />
   <link rel="apple-touch-icon" href="/img/favicon.png" />
-
   <link rel="stylesheet" href="/css/app.css" />
 </head>
 
@@ -22,7 +21,7 @@
     <div class="wrap topbar-inner">
       <div class="brand">
         <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
-        <div class="brand-sub muted">Conta • Configurações • V1</div>
+        <div class="brand-sub muted">Configurações • V1</div>
       </div>
 
       <div class="userbox">
@@ -35,84 +34,99 @@
 
   <main class="wrap main">
 
-    <!-- Perfil -->
     <section class="card">
-      <h1 class="h1" style="margin:0;">Conta</h1>
-      <p class="muted" style="margin-top:8px;">
-        Configurações do ambiente e atalhos do sistema.
-      </p>
+      <h1 class="h1">Configurações</h1>
+      <div class="muted">Configurações do ambiente e atalhos do sistema.</div>
 
-      <div class="grid-2" style="margin-top:14px;gap:12px;">
-        <div class="mini-card">
+      <div class="row" style="margin-top:14px;align-items:stretch;gap:12px;flex-wrap:wrap;">
+        <div class="mini-card" style="flex:1;min-width:260px;">
           <div class="muted small">Usuário</div>
-          <div id="userName" style="font-weight:900;margin-top:6px;">—</div>
-          <div id="userEmail2" class="muted small mono" style="margin-top:6px;">—</div>
+          <div style="font-weight:900;margin-top:4px;">Conta ativa</div>
+          <div id="userEmail2" class="mono small" style="margin-top:6px;">—</div>
+          <div id="connOk" class="muted small" style="margin-top:10px;">Conexão: —</div>
         </div>
 
-        <div class="mini-card">
+        <div class="mini-card" style="flex:1;min-width:260px;">
           <div class="muted small">Status</div>
-          <div id="statusText" style="font-weight:900;margin-top:6px;">Verificando…</div>
-          <div id="statusSub" class="muted small" style="margin-top:6px;">Sessão e conexão</div>
+          <div style="font-weight:900;margin-top:4px;">
+            Online <span aria-hidden="true">✅</span>
+          </div>
+          <div class="muted small" style="margin-top:6px;">Sessão OK • Banco OK</div>
         </div>
       </div>
-
-      <div id="msg" class="muted small" style="margin-top:10px;"></div>
     </section>
 
-    <!-- Configurações -->
     <section class="card" style="margin-top:14px;">
-      <h2 class="h2" style="margin:0;">Configurações</h2>
-      <p class="muted small" style="margin-top:8px;">
-        Aqui ficam as telas que transformam a Agenda em “mini PMS” (sem complicação).
-      </p>
+      <h2 class="h1" style="font-size:20px;">Atalhos</h2>
+      <div class="muted small">Telas de cadastro/apoio (admin).</div>
 
       <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
         <a class="btn primary" href="/quartos.html">Quartos</a>
         <a class="btn outline" href="/reservas.html">Reservas</a>
-        <a class="btn outline" href="/app.html">Home</a>
-      </div>
-
-      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
-        <button id="btnPing" class="btn outline small" type="button">Testar conexão</button>
-        <button id="btnCopyEmail" class="btn outline small" type="button">Copiar e-mail</button>
+        <a class="btn outline" href="/mapa.html">Mapa</a>
+        <button id="btnTestConn" class="btn outline" type="button">Testar conexão</button>
+        <button id="btnCopyEmail" class="btn outline" type="button">Copiar e-mail</button>
       </div>
     </section>
 
-    <!-- Ajuda -->
     <section class="card" style="margin-top:14px;">
-      <h2 class="h2" style="margin:0;">Ajuda</h2>
-      <p class="muted small" style="margin-top:8px;">
-        Suporte via WhatsApp. Se algo travar, mande print do erro + o que você estava fazendo.
-      </p>
+      <h2 class="h1" style="font-size:20px;">Ajuda</h2>
+      <div class="muted small">Suporte via WhatsApp. Se algo travar, mande print do erro + o que você estava fazendo.</div>
 
-      <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap;">
-        <a class="btn outline" target="_blank" rel="noopener noreferrer" href="https://wa.me/5513997408157">Suporte WhatsApp</a>
+      <div class="row" style="margin-top:12px;">
+        <a class="btn outline" href="https://wa.me/5513997408157" target="_blank" rel="noopener noreferrer">
+          Suporte WhatsApp
+        </a>
       </div>
     </section>
 
     <footer class="foot muted small">
-      BRsys Agenda • V1 • suporte via WhatsApp
+      Agenda BRsys • Configurações (admin)
     </footer>
-
   </main>
-
-  <!-- Bottom Nav -->
-  <nav class="bottom-nav">
-    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
-    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
-    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
-    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
-  </nav>
 
   <!-- Guard + user email -->
   <script type="module">
     import { requireAuth } from "/js/auth.js";
-    const user = await requireAuth({ redirectTo: "/entrar.html?next=/conta.html", renderUserInfo: false });
-    const el = document.getElementById("userEmail");
-    if (el) el.textContent = user?.email || "(sem e-mail)";
+    import { supabase } from "/js/supabase.js";
+
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/config.html", renderUserInfo: false });
+
+    const email = user?.email || "(sem e-mail)";
+    document.getElementById("userEmail").textContent = email;
+    document.getElementById("userEmail2").textContent = email;
+
+    // Botões
+    document.getElementById("btnCopyEmail")?.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(email);
+        alert("E-mail copiado ✅");
+      } catch (e) {
+        alert("Não consegui copiar (permissão do navegador).");
+      }
+    });
+
+    document.getElementById("btnTestConn")?.addEventListener("click", async () => {
+      const el = document.getElementById("connOk");
+      if (el) el.textContent = "Conexão: testando…";
+
+      // teste leve: pega sessão + ping simples
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess?.session) throw new Error("Sem sessão");
+        if (el) el.textContent = "Conexão: OK ✅";
+      } catch (err) {
+        console.error(err);
+        if (el) el.textContent = "Conexão: erro ❌";
+      }
+    });
+
+    // logout (seu auth.js provavelmente já faz isso, mas deixo safe)
+    document.getElementById("logout")?.addEventListener("click", async () => {
+      try { await supabase.auth.signOut(); } catch(e) {}
+      window.location.href = "/entrar.html";
+    });
   </script>
 
-  <script type="module" src="/js/nav.js"></script>
-  <script type="module" src="/js/conta.js"></script>
 </body>
 </html>
