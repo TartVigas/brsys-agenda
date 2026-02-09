@@ -1,4 +1,4 @@
-// /js/conta.js
+// /js/config.js
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
 
