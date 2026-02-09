@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <title>Conta da Reserva • Agenda BRsys</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="robots" content="noindex,nofollow" />
+  <meta name="description" content="Conta da reserva: lançamentos e pagamentos, com totais e checkout." />
+  <link rel="canonical" href="https://agenda.brsys.com.br/reserva-conta.html" />
+
+  <link rel="icon" type="image/png" href="/img/favicon.png" />
+  <link rel="apple-touch-icon" href="/img/favicon.png" />
+
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+
+<body class="app-body">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <div class="brand-title">Agenda <span class="brand-accent">BRsys</span></div>
+        <div class="brand-sub muted">Conta da reserva • V1</div>
+      </div>
+
+      <div class="userbox">
+        <div class="muted small">Logado:</div>
+        <div id="userEmail" class="mono small">carregando…</div>
+        <button id="logout" class="btn outline small" type="button">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap main">
+
+    <!-- Header -->
+    <section class="card">
+      <div class="row" style="align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div>
+          <h1 class="h1" style="margin:0;">Conta</h1>
+          <div id="resMeta" class="muted small" style="margin-top:6px;">Reserva: —</div>
+
+          <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap;align-items:center;">
+            <span class="muted small">Status:</span>
+            <span id="contaStatus" class="pill">—</span>
+          </div>
+        </div>
+
+        <div class="row" style="gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+          <a class="btn outline" href="/reservas.html">Voltar</a>
+          <!-- Se quiser voltar pra reserva específica -->
+          <a id="btnVoltarReserva" class="btn outline" href="/reserva.html">Abrir reserva</a>
+        </div>
+      </div>
+
+      <!-- Msg -->
+      <div id="contaMsg" class="muted small" style="margin-top:10px;"></div>
+    </section>
+
+    <!-- Totais -->
+    <section class="card" style="margin-top:14px;">
+      <div class="row" style="margin:0;gap:10px;flex-wrap:wrap;">
+        <div class="card" style="padding:12px;min-width:180px;flex:1;">
+          <div class="muted small">Total</div>
+          <div id="totalLanc" class="h2" style="margin:6px 0 0;">R$ 0,00</div>
+        </div>
+
+        <div class="card" style="padding:12px;min-width:180px;flex:1;">
+          <div class="muted small">Pago</div>
+          <div id="totalPago" class="h2" style="margin:6px 0 0;">R$ 0,00</div>
+        </div>
+
+        <div class="card" style="padding:12px;min-width:180px;flex:1;">
+          <div class="muted small">Saldo</div>
+          <div id="saldo" class="h2" style="margin:6px 0 0;">R$ 0,00</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:14px;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+        <button id="btnFecharConta" class="btn outline" disabled style="opacity:.55;" type="button">
+          Fechar conta / Checkout
+        </button>
+      </div>
+    </section>
+
+    <!-- Forms -->
+    <section class="card" style="margin-top:14px;">
+      <div class="grid-2" style="gap:14px;align-items:start;">
+
+        <!-- Lançamentos -->
+        <div>
+          <h2 class="h2" style="margin:0;">Lançamentos</h2>
+          <div class="muted small" style="margin-top:6px;">
+            Diária, consumo, extras, ajustes…
+          </div>
+
+          <form id="formLanc" style="margin-top:12px;">
+            <label class="label">
+              Descrição
+              <input id="lDesc" class="input" required placeholder="Ex: Diária, Porções, Late checkout..." />
+            </label>
+
+            <div class="grid-2" style="margin-top:10px;">
+              <label class="label">
+                Valor (R$)
+                <input id="lValor" class="input" required inputmode="decimal" placeholder="Ex: 180,00" />
+              </label>
+
+              <label class="label">
+                Tipo
+                <select id="lTipo" class="input">
+                  <option value="diaria">Diária</option>
+                  <option value="extra" selected>Extra</option>
+                  <option value="ajuste">Ajuste</option>
+                </select>
+              </label>
+            </div>
+
+            <button class="btn primary" style="margin-top:10px;" type="submit">+ Adicionar</button>
+          </form>
+
+          <div id="listaLanc" style="margin-top:12px;"></div>
+        </div>
+
+        <!-- Pagamentos -->
+        <div>
+          <h2 class="h2" style="margin:0;">Pagamentos</h2>
+          <div class="muted small" style="margin-top:6px;">
+            Pix, cartão, dinheiro…
+          </div>
+
+          <form id="formPag" style="margin-top:12px;">
+            <div class="grid-2">
+              <label class="label">
+                Forma
+                <select id="pForma" class="input">
+                  <option value="pix">Pix</option>
+                  <option value="cartao">Cartão</option>
+                  <option value="dinheiro">Dinheiro</option>
+                </select>
+              </label>
+
+              <label class="label">
+                Valor (R$)
+                <input id="pValor" class="input" required inputmode="decimal" placeholder="Ex: 180,00" />
+              </label>
+            </div>
+
+            <label class="label" style="margin-top:10px;">
+              Obs (opcional)
+              <input id="pObs" class="input" placeholder="Ex: 2x cartão, comprovante..." />
+            </label>
+
+            <button class="btn primary" style="margin-top:10px;" type="submit">+ Registrar</button>
+          </form>
+
+          <div id="listaPag" style="margin-top:12px;"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <footer class="foot muted small">
+      BRsys Agenda • Conta da reserva • V1 • suporte via WhatsApp
+    </footer>
+
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav">
+    <a class="bn-item" data-nav="home" href="/app.html">Home</a>
+    <a class="bn-item" data-nav="reservas" href="/reservas.html">Reservas</a>
+    <a class="bn-item" data-nav="hoje" href="/hoje.html">Hoje</a>
+    <a class="bn-item" data-nav="conta" href="/conta.html">Conta</a>
+  </nav>
+
+  <!-- Guard + user email -->
+  <script type="module">
+    import { requireAuth } from "/js/auth.js";
+
+    const user = await requireAuth({ redirectTo: "/entrar.html?next=/reserva-conta.html", renderUserInfo: false });
+    const el = document.getElementById("userEmail");
+    if (el) el.textContent = user?.email || "(sem e-mail)";
+
+    // reserva id (pra link "Abrir reserva")
+    const u = new URL(window.location.href);
+    const id = u.searchParams.get("id");
+    const btn = document.getElementById("btnVoltarReserva");
+    const meta = document.getElementById("resMeta");
+
+    if (meta) meta.textContent = id ? `Reserva: ${id}` : "Reserva: (sem id)";
+    if (btn) btn.href = id ? `/reserva.html?id=${encodeURIComponent(id)}` : "/reservas.html";
+  </script>
+
+  <script type="module" src="/js/nav.js"></script>
+  <script type="module" src="/js/reserva-conta.js"></script>
+
+</body>
+</html>
