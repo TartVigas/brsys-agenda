@@ -1,4 +1,4 @@
-// /js/mapa.js — Mapa de Quartos (V1)
+// /js/mapa.js — Mapa de Quartos (V1.2)
 // Fonte: view public.agenda_quartos_mapa
 import { supabase } from "./supabase.js";
 import { requireAuth } from "./auth.js";
@@ -6,19 +6,24 @@ import { requireAuth } from "./auth.js";
 (function () {
   const $ = (sel, root = document) => root.querySelector(sel);
 
-  const elToday = $("#todayLabel");
-  const elMsg = $("#msg");
+  const elToday   = $("#todayLabel");
+  const elMsg     = $("#msg");
   const elLoading = $("#stateLoading");
-  const elEmpty = $("#stateEmpty");
-  const elGrid = $("#grid");
-  const elSearch = $("#qSearch");
-  const elFilter = $("#qFilter");
+  const elEmpty   = $("#stateEmpty");
+  const elGrid    = $("#grid");
+  const elSearch  = $("#qSearch");
+  const elFilter  = $("#qFilter");
   const btnReload = $("#btnReload");
 
   let USER = null;
   let ALL = []; // rows do mapa
 
-  // ---------- helpers ----------
+  const DEBUG = new URLSearchParams(location.search).get("debug") === "1";
+
+  /* =========================
+     Helpers (date, text, ui)
+  ========================= */
+
   function isoToday() {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -46,12 +51,22 @@ import { requireAuth } from "./auth.js";
   }
 
   // DB guarda 55...
+  function normalizePhone55(raw) {
+    const d = onlyDigits(raw);
+    if (!d) return "";
+    if (d.startsWith("55")) return d;
+    if (d.length === 10 || d.length === 11) return `55${d}`;
+    // fallback: retorna como está (pode ser intl)
+    return d;
+  }
+
   function waLink(phone55, text = "") {
-    const d = onlyDigits(phone55);
-    if (!d) return null;
-    const w = d.startsWith("55") ? d : (d.length === 10 || d.length === 11) ? `55${d}` : d;
-    if (!w.startsWith("55")) return null;
-    if (!(w.length === 12 || w.length === 13)) return null;
+    const w = normalizePhone55(phone55);
+    if (!w) return null;
+
+    // regra simples BR: 55 + DDD + numero => 12 ou 13 dígitos
+    if (w.startsWith("55") && !(w.length === 12 || w.length === 13)) return null;
+
     const qs = text ? `?text=${encodeURIComponent(text)}` : "";
     return `https://wa.me/${w}${qs}`;
   }
@@ -70,15 +85,42 @@ import { requireAuth } from "./auth.js";
     el.style.display = on ? "" : "none";
   }
 
+  function logSbError(ctx, error) {
+    if (!error) return;
+    const payload = {
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    };
+    console.error(`[mapa:${ctx}]`, payload);
+
+    if (DEBUG) {
+      setMsg(
+        `Erro (${ctx}): ${payload.message || "—"}${payload.code ? ` • code=${payload.code}` : ""}`,
+        "error"
+      );
+    }
+  }
+
+  function disableBtn(btn, on = true) {
+    if (!btn) return;
+    btn.disabled = on;
+    btn.style.opacity = on ? "0.7" : "";
+    btn.style.pointerEvents = on ? "none" : "";
+  }
+
   function statusPill(st) {
     const map = {
-      livre: { t: "Livre", c: "rgba(102,242,218,.95)" },
-      ocupado: { t: "Ocupado", c: "rgba(255,210,120,.95)" },
-      reservado_hoje: { t: "Entra hoje", c: "rgba(160,200,255,.95)" },
-      reservado_futuro: { t: "Reservado", c: "rgba(255,255,255,.75)" },
+      livre:           { t: "Livre",      c: "rgba(102,242,218,.95)" },
+      ocupado:         { t: "Ocupado",    c: "rgba(255,210,120,.95)" },
+      reservado_hoje:  { t: "Entra hoje", c: "rgba(160,200,255,.95)" },
+      reservado_futuro:{ t: "Reservado",  c: "rgba(255,255,255,.75)" },
+      bloqueado:       { t: "Bloqueado",  c: "rgba(255,120,120,.90)" },
+      limpeza:         { t: "Limpeza",    c: "rgba(255,245,160,.92)" },
     };
     const s = map[st] || { t: st || "—", c: "rgba(255,255,255,.75)" };
-    return `<span class="pill" style="border-color:rgba(255,255,255,.12);color:${s.c};">${s.t}</span>`;
+    return `<span class="pill" style="border-color:rgba(255,255,255,.12);color:${s.c};">${escapeHtml(s.t)}</span>`;
   }
 
   function roomTitle(r) {
@@ -91,10 +133,13 @@ import { requireAuth } from "./auth.js";
   function roomMeta(r) {
     const tipo = r.tipo ? escapeHtml(r.tipo) : "—";
     const cap = r.capacidade ?? "—";
-    return `${tipo} • Cap: ${cap}`;
+    return `${tipo} • Cap: ${escapeHtml(String(cap))}`;
   }
 
-  // ---------- ações ----------
+  /* =========================
+     Actions (checkin/checkout/walkin)
+  ========================= */
+
   async function actionCheckin(reservaId) {
     setMsg("Fazendo check-in…", "info");
 
@@ -105,8 +150,8 @@ import { requireAuth } from "./auth.js";
       .eq("user_id", USER.id);
 
     if (error) {
-      console.error("[mapa] checkin error:", error);
-      setMsg("Erro ao fazer check-in. Verifique RLS.", "error");
+      logSbError("checkin", error);
+      setMsg("Erro ao fazer check-in. Verifique permissões/RLS.", "error");
       return;
     }
 
@@ -127,8 +172,8 @@ import { requireAuth } from "./auth.js";
       .eq("user_id", USER.id);
 
     if (error) {
-      console.error("[mapa] checkout error:", error);
-      setMsg("Erro ao fazer checkout. Verifique RLS.", "error");
+      logSbError("checkout", error);
+      setMsg("Erro ao fazer checkout. Verifique permissões/RLS.", "error");
       return;
     }
 
@@ -154,11 +199,12 @@ import { requireAuth } from "./auth.js";
 
     setMsg("Criando walk-in…", "info");
 
+    const phone55 = normalizePhone55(wpp);
     const payload = {
       user_id: USER.id,
       quarto_id: quartoId,
       nome_hospede: nome.trim(),
-      whatsapp: onlyDigits(wpp) ? (onlyDigits(wpp).startsWith("55") ? onlyDigits(wpp) : `55${onlyDigits(wpp)}`) : null,
+      whatsapp: phone55 ? phone55 : null,
       checkin: today,
       checkout,
       observacoes: "walk-in",
@@ -172,32 +218,33 @@ import { requireAuth } from "./auth.js";
       .single();
 
     if (error) {
-      console.error("[mapa] walkin error:", error);
-      setMsg("Erro ao criar walk-in. Verifique RLS/tabela.", "error");
+      logSbError("walkin", error);
+      setMsg("Erro ao criar walk-in. Verifique permissões/RLS.", "error");
       return;
     }
 
     setMsg("Walk-in criado ✅", "ok");
-    // abre a reserva para editar/conta
     window.location.href = `/reserva.html?id=${encodeURIComponent(data.id)}`;
   }
 
-  // ---------- render ----------
+  /* =========================
+     Render
+  ========================= */
+
   function renderCard(r) {
     const st = r.mapa_status || "—";
 
-    const occName = r.nome_hospede ? escapeHtml(r.nome_hospede) : "";
-    const occOut = r.checkout ? fmtBR(r.checkout) : "—";
+    const occName  = r.nome_hospede ? escapeHtml(r.nome_hospede) : "";
+    const occOut   = r.checkout ? fmtBR(r.checkout) : "—";
     const occResId = r.reserva_id;
 
-    const nextName = r.next_nome_hospede ? escapeHtml(r.next_nome_hospede) : "";
-    const nextIn = r.next_checkin ? fmtBR(r.next_checkin) : "—";
+    const nextName  = r.next_nome_hospede ? escapeHtml(r.next_nome_hospede) : "";
+    const nextIn    = r.next_checkin ? fmtBR(r.next_checkin) : "—";
     const nextResId = r.next_reserva_id;
 
-    const waOcc = waLink(r.whatsapp, `Olá ${occName || "Olá"}! Aqui é da recepção 🙂`);
+    const waOcc  = waLink(r.whatsapp, `Olá ${occName || "Olá"}! Aqui é da recepção 🙂`);
     const waNext = waLink(r.next_whatsapp, `Olá ${nextName || "Olá"}! Aqui é da recepção 🙂`);
 
-    // bloco de conteúdo por status
     let body = "";
     let actions = "";
 
@@ -253,7 +300,9 @@ import { requireAuth } from "./auth.js";
     }
 
     return `
-      <div class="mini-card" data-status="${escapeHtml(st)}" data-search="${escapeHtml((r.codigo||"")+" "+(r.nome||"")+" "+(r.tipo||""))}">
+      <div class="mini-card"
+           data-status="${escapeHtml(st)}"
+           data-search="${escapeHtml((r.codigo||"")+" "+(r.nome||"")+" "+(r.tipo||""))}">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
           <div style="font-weight:900;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
             ${roomTitle(r)}
@@ -269,11 +318,13 @@ import { requireAuth } from "./auth.js";
   }
 
   function applyFilter() {
+    if (!elGrid) return;
+
     const q = (elSearch?.value || "").trim().toLowerCase();
     const f = (elFilter?.value || "all").trim();
 
-    const cards = Array.from(elGrid?.children || []);
-    cards.forEach((card) => {
+    const cards = Array.from(elGrid.children || []);
+    for (const card of cards) {
       const st = card.getAttribute("data-status") || "";
       const s = (card.getAttribute("data-search") || "").toLowerCase();
 
@@ -281,10 +332,13 @@ import { requireAuth } from "./auth.js";
       const okSearch = !q ? true : s.includes(q);
 
       card.style.display = (okStatus && okSearch) ? "" : "none";
-    });
+    }
   }
 
-  // ---------- load ----------
+  /* =========================
+     Load
+  ========================= */
+
   async function load() {
     show(elLoading, true);
     show(elEmpty, false);
@@ -299,7 +353,7 @@ import { requireAuth } from "./auth.js";
       .order("codigo", { ascending: true });
 
     if (error) {
-      console.error("[mapa] load error:", error);
+      logSbError("load", error);
       setMsg("Erro ao carregar mapa. Verifique view/RLS.", "error");
       show(elLoading, false);
       show(elEmpty, true);
@@ -308,7 +362,6 @@ import { requireAuth } from "./auth.js";
     }
 
     ALL = data || [];
-
     show(elLoading, false);
 
     if (!ALL.length) {
@@ -322,32 +375,56 @@ import { requireAuth } from "./auth.js";
 
     show(elGrid, true);
     applyFilter();
+  }
 
-    // bind actions (delegation)
+  /* =========================
+     Events (bind once)
+  ========================= */
+
+  function bind() {
+    btnReload?.addEventListener("click", load);
+    elSearch?.addEventListener("input", applyFilter);
+    elFilter?.addEventListener("change", applyFilter);
+
+    // Delegation (bind UMA vez, fora do load)
     elGrid?.addEventListener("click", async (ev) => {
-      const btn = ev.target?.closest("button[data-act]");
+      const btn = ev.target?.closest?.("button[data-act]");
       if (!btn) return;
 
       const act = btn.getAttribute("data-act");
 
-      if (act === "walkin") {
-        const room = btn.getAttribute("data-room");
-        if (room) await actionWalkin(room);
-      }
+      // anti double-click
+      disableBtn(btn, true);
 
-      if (act === "checkin") {
-        const id = btn.getAttribute("data-id");
-        if (id) await actionCheckin(id);
-      }
+      try {
+        if (act === "walkin") {
+          const room = btn.getAttribute("data-room");
+          if (room) await actionWalkin(room);
+          return;
+        }
 
-      if (act === "checkout") {
-        const id = btn.getAttribute("data-id");
-        if (id) await actionCheckout(id);
+        if (act === "checkin") {
+          const id = btn.getAttribute("data-id");
+          if (id) await actionCheckin(id);
+          return;
+        }
+
+        if (act === "checkout") {
+          const id = btn.getAttribute("data-id");
+          if (id) await actionCheckout(id);
+          return;
+        }
+      } finally {
+        // se não redirecionou, reabilita
+        disableBtn(btn, false);
       }
-    }, { once: true });
+    });
   }
 
-  // ---------- boot ----------
+  /* =========================
+     Boot
+  ========================= */
+
   (async function boot() {
     USER = await requireAuth({ redirectTo: "/entrar.html?next=/mapa.html", renderUserInfo: false });
     if (!USER) return;
@@ -355,10 +432,7 @@ import { requireAuth } from "./auth.js";
     const today = isoToday();
     if (elToday) elToday.textContent = `Hoje: ${fmtBR(today)} • Livre/Reservado/Ocupado`;
 
+    bind();
     await load();
-
-    btnReload?.addEventListener("click", load);
-    elSearch?.addEventListener("input", applyFilter);
-    elFilter?.addEventListener("change", applyFilter);
   })();
 })();
