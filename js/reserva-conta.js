@@ -1,19 +1,8 @@
-// /js/reserva-conta.js — Conta da Reserva (V1.0 - JOIN SAFE + DAY USE friendly)
-// - Usa 2 tabelas: agenda_lancamentos, agenda_pagamentos
-// - Requer colunas: reserva_id (uuid) em ambas (FK -> agenda_reservas.id)
+// /js/reserva-conta.js — Conta da Reserva (V1.1 - JOIN SAFE + COLUMN SAFE)
+// - JOIN SAFE: usa reserva_id e user_id
+// - COLUMN SAFE: se coluna não existir (ex: obs), faz fallback automático
 // - Totais: Total (lancamentos), Pago (pagamentos), Saldo = Total - Pago
-// - UI: compatível com reserva.html (ids abaixo)
-// - Não derruba a tela se a conta falhar (mostra mensagem)
-// - Contrato WhatsApp e reserva ficam no reserva.js; aqui só conta.
-
-/* =========================================================
-   IDs esperados no HTML (reserva.html):
-   - #contaStatus, #totalLanc, #totalPago, #saldo
-   - #formLanc, #lDesc, #lValor, #lTipo, #listaLanc
-   - #formPag, #pForma, #pValor, #pObs, #listaPag
-   - #contaMsg
-   - #btnFecharConta (opcional: habilita quando saldo <= 0)
-   ========================================================= */
+// - Compatível com reserva.html (ids do seu HTML)
 
 import { supabase } from "/js/supabase.js";
 import { requireAuth } from "/js/auth.js";
@@ -63,12 +52,13 @@ function setPill(text, tone = "info") {
 }
 
 function setMsg(text = "", tone = "info") {
-  if (!elMsg) return;
-  elMsg.textContent = text || "";
-  elMsg.style.color =
-    tone === "error" ? "rgba(255,120,120,.92)" :
-    tone === "ok" ? "rgba(102,242,218,.95)" :
-    "rgba(255,255,255,.70)";
+  if (elMsg) {
+    elMsg.textContent = text || "";
+    elMsg.style.color =
+      tone === "error" ? "rgba(255,120,120,.92)" :
+      tone === "ok" ? "rgba(102,242,218,.95)" :
+      "rgba(255,255,255,.70)";
+  }
 }
 
 function escapeHtml(str) {
@@ -80,25 +70,12 @@ function escapeHtml(str) {
     .replaceAll("'", "&#039;");
 }
 
-function onlyDigits(s = "") {
-  return String(s || "").replace(/[^\d]/g, "");
-}
-
-/** aceita "180,00" "180.00" "180" "R$ 180,00" */
 function parseMoneyBR(v) {
   const raw = String(v ?? "").trim();
   if (!raw) return NaN;
-
-  // remove tudo que não for dígito, ponto, vírgula, sinal
   let s = raw.replace(/[^\d,.\-]/g, "");
-
-  // Se tiver vírgula e ponto, assume que ponto é milhar e vírgula é decimal
-  if (s.includes(",") && s.includes(".")) {
-    s = s.replaceAll(".", "").replace(",", ".");
-  } else if (s.includes(",")) {
-    // só vírgula -> decimal
-    s = s.replace(",", ".");
-  }
+  if (s.includes(",") && s.includes(".")) s = s.replaceAll(".", "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
   const n = Number(s);
   return Number.isFinite(n) ? n : NaN;
 }
@@ -113,11 +90,24 @@ function getReservaIdFromURL() {
   return (url.searchParams.get("id") || "").trim();
 }
 
+function isMissingColumnError(err, colName) {
+  const msg = String(err?.message || "").toLowerCase();
+  return msg.includes("does not exist") && msg.includes(String(colName || "").toLowerCase());
+}
+
+function computeTotals() {
+  const total = STATE.lancamentos.reduce((acc, x) => acc + Number(x.valor || 0), 0);
+  const pago = STATE.pagamentos.reduce((acc, x) => acc + Number(x.valor || 0), 0);
+  const saldo = total - pago;
+  return { total, pago, saldo };
+}
+
 /* =========================
-   DB ops
+   LOAD — column safe
 ========================= */
 
 async function loadLancamentos(userId, reservaId) {
+  // aqui supomos que descrição/valor/tipo existem. Se não, o erro vai aparecer no console.
   const { data, error } = await supabase
     .from("agenda_lancamentos")
     .select("id,reserva_id,descricao,valor,tipo,created_at")
@@ -130,16 +120,39 @@ async function loadLancamentos(userId, reservaId) {
 }
 
 async function loadPagamentos(userId, reservaId) {
-  const { data, error } = await supabase
-    .from("agenda_pagamentos")
-    .select("id,reserva_id,forma,valor,obs,created_at")
-    .eq("user_id", userId)
-    .eq("reserva_id", reservaId)
-    .order("created_at", { ascending: false });
+  // TENTA com obs
+  {
+    const { data, error } = await supabase
+      .from("agenda_pagamentos")
+      .select("id,reserva_id,forma,valor,obs,created_at")
+      .eq("user_id", userId)
+      .eq("reserva_id", reservaId)
+      .order("created_at", { ascending: false });
 
-  if (error) throw error;
-  return Array.isArray(data) ? data : [];
+    if (!error) return Array.isArray(data) ? data : [];
+
+    // Fallback: sem obs
+    if (isMissingColumnError(error, "obs")) {
+      const { data: d2, error: e2 } = await supabase
+        .from("agenda_pagamentos")
+        .select("id,reserva_id,forma,valor,created_at")
+        .eq("user_id", userId)
+        .eq("reserva_id", reservaId)
+        .order("created_at", { ascending: false });
+
+      if (e2) throw e2;
+
+      // injeta obs=null para manter render consistente
+      return (Array.isArray(d2) ? d2 : []).map((x) => ({ ...x, obs: null }));
+    }
+
+    throw error;
+  }
 }
+
+/* =========================
+   INSERT — column safe
+========================= */
 
 async function insertLancamento(userId, reservaId, payload) {
   const { data, error } = await supabase
@@ -158,18 +171,9 @@ async function insertLancamento(userId, reservaId, payload) {
   return data?.id;
 }
 
-async function deleteLancamento(userId, id) {
-  const { error } = await supabase
-    .from("agenda_lancamentos")
-    .delete()
-    .eq("user_id", userId)
-    .eq("id", id);
-
-  if (error) throw error;
-}
-
 async function insertPagamento(userId, reservaId, payload) {
-  const { data, error } = await supabase
+  // tenta com obs
+  const attempt1 = await supabase
     .from("agenda_pagamentos")
     .insert({
       user_id: userId,
@@ -181,8 +185,36 @@ async function insertPagamento(userId, reservaId, payload) {
     .select("id")
     .single();
 
+  if (!attempt1.error) return attempt1.data?.id;
+
+  // fallback sem obs
+  if (isMissingColumnError(attempt1.error, "obs")) {
+    const attempt2 = await supabase
+      .from("agenda_pagamentos")
+      .insert({
+        user_id: userId,
+        reserva_id: reservaId,
+        forma: payload.forma || "pix",
+        valor: payload.valor,
+      })
+      .select("id")
+      .single();
+
+    if (attempt2.error) throw attempt2.error;
+    return attempt2.data?.id;
+  }
+
+  throw attempt1.error;
+}
+
+async function deleteLancamento(userId, id) {
+  const { error } = await supabase
+    .from("agenda_lancamentos")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", id);
+
   if (error) throw error;
-  return data?.id;
 }
 
 async function deletePagamento(userId, id) {
@@ -196,49 +228,35 @@ async function deletePagamento(userId, id) {
 }
 
 /* =========================
-   Render
+   RENDER
 ========================= */
-
-function computeTotals() {
-  const total = STATE.lancamentos.reduce((acc, x) => acc + Number(x.valor || 0), 0);
-  const pago = STATE.pagamentos.reduce((acc, x) => acc + Number(x.valor || 0), 0);
-  const saldo = total - pago;
-  return { total, pago, saldo };
-}
 
 function renderTotals() {
   const { total, pago, saldo } = computeTotals();
-
   if (elTotalLanc) elTotalLanc.textContent = fmtBRL(total);
   if (elTotalPago) elTotalPago.textContent = fmtBRL(pago);
   if (elSaldo) elSaldo.textContent = fmtBRL(saldo);
 
-  // botão "Fechar conta" só quando saldo <= 0 e existe checkout/checkin fora daqui
   if (elBtnFechar) {
     const ok = saldo <= 0.0000001 && (STATE.lancamentos.length || STATE.pagamentos.length);
     elBtnFechar.disabled = !ok;
     elBtnFechar.style.opacity = ok ? "1" : ".55";
   }
 
-  if (saldo <= 0.0000001 && (STATE.lancamentos.length || STATE.pagamentos.length)) {
-    setPill("Quitada", "ok");
-  } else if ((STATE.lancamentos.length || STATE.pagamentos.length)) {
-    setPill("Em aberto", "info");
-  } else {
-    setPill("Sem movimentos", "info");
-  }
+  if (saldo <= 0.0000001 && (STATE.lancamentos.length || STATE.pagamentos.length)) setPill("Quitada", "ok");
+  else if ((STATE.lancamentos.length || STATE.pagamentos.length)) setPill("Em aberto", "info");
+  else setPill("Sem movimentos", "info");
 }
 
 function renderLancamentos() {
   if (!elListaLanc) return;
 
-  const items = STATE.lancamentos;
-  if (!items.length) {
+  if (!STATE.lancamentos.length) {
     elListaLanc.innerHTML = `<div class="muted small">Nenhum lançamento.</div>`;
     return;
   }
 
-  elListaLanc.innerHTML = items
+  elListaLanc.innerHTML = STATE.lancamentos
     .map((x) => {
       const desc = escapeHtml(x.descricao || "—");
       const tipo = escapeHtml(x.tipo || "extra");
@@ -271,7 +289,7 @@ function renderLancamentos() {
         btn.disabled = true;
         await deleteLancamento(STATE.user.id, id);
         await refresh();
-        setMsg("Lançamento removido.", "ok");
+        setMsg("Lançamento removido ✅", "ok");
       } catch (e) {
         console.error("[conta] delete lancamento:", e);
         setMsg("Erro ao remover lançamento.", "error");
@@ -285,13 +303,12 @@ function renderLancamentos() {
 function renderPagamentos() {
   if (!elListaPag) return;
 
-  const items = STATE.pagamentos;
-  if (!items.length) {
+  if (!STATE.pagamentos.length) {
     elListaPag.innerHTML = `<div class="muted small">Nenhum pagamento.</div>`;
     return;
   }
 
-  elListaPag.innerHTML = items
+  elListaPag.innerHTML = STATE.pagamentos
     .map((x) => {
       const forma = escapeHtml(x.forma || "pix");
       const obs = escapeHtml(x.obs || "");
@@ -324,7 +341,7 @@ function renderPagamentos() {
         btn.disabled = true;
         await deletePagamento(STATE.user.id, id);
         await refresh();
-        setMsg("Pagamento removido.", "ok");
+        setMsg("Pagamento removido ✅", "ok");
       } catch (e) {
         console.error("[conta] delete pagamento:", e);
         setMsg("Erro ao remover pagamento.", "error");
@@ -342,7 +359,7 @@ function renderAll() {
 }
 
 /* =========================
-   Refresh (load both)
+   REFRESH
 ========================= */
 async function refresh() {
   if (!STATE.user?.id || !STATE.reservaId) return;
@@ -359,27 +376,26 @@ async function refresh() {
     renderAll();
   } catch (e) {
     console.error("[conta] refresh error:", e);
-    // Erro típico: coluna reserva_id não existe => orientar sem derrubar
+
     const msg = String(e?.message || "").toLowerCase();
     if (msg.includes("reserva_id") && msg.includes("does not exist")) {
-      setMsg("Banco ainda sem vínculo da conta com a reserva (reserva_id). Crie a coluna no Supabase.", "error");
+      setMsg("Banco ainda sem vínculo (reserva_id) em lançamentos/pagamentos. Crie a coluna no Supabase.", "error");
       setPill("Indisponível", "error");
-    } else {
-      setMsg("Não foi possível carregar a conta agora.", "error");
-      setPill("Erro", "error");
+      return;
     }
+
+    setMsg("Não foi possível carregar a conta agora.", "error");
+    setPill("Erro", "error");
   }
 }
 
 /* =========================
-   Bind forms
+   BIND FORMS
 ========================= */
 function bindLancForm() {
   if (!formLanc) return;
 
-  // opcional: máscara simples no input de valor
   inLValor?.addEventListener("input", () => {
-    // deixa o usuário digitar, só limpa caracteres muito estranhos
     inLValor.value = String(inLValor.value || "").replace(/[^\d,.\-]/g, "");
   });
 
@@ -407,11 +423,7 @@ function bindLancForm() {
       const btn = formLanc.querySelector("button[type='submit']");
       if (btn) btn.disabled = true;
 
-      await insertLancamento(STATE.user.id, STATE.reservaId, {
-        descricao: desc,
-        tipo,
-        valor: valorNum,
-      });
+      await insertLancamento(STATE.user.id, STATE.reservaId, { descricao: desc, tipo, valor: valorNum });
 
       if (inLDesc) inLDesc.value = "";
       if (inLValor) inLValor.value = "";
@@ -454,11 +466,7 @@ function bindPagForm() {
       const btn = formPag.querySelector("button[type='submit']");
       if (btn) btn.disabled = true;
 
-      await insertPagamento(STATE.user.id, STATE.reservaId, {
-        forma,
-        valor: valorNum,
-        obs: obs || null,
-      });
+      await insertPagamento(STATE.user.id, STATE.reservaId, { forma, valor: valorNum, obs: obs || null });
 
       if (inPValor) inPValor.value = "";
       if (inPObs) inPObs.value = "";
@@ -475,14 +483,8 @@ function bindPagForm() {
   });
 }
 
-/* =========================
-   Fechar conta (só UI)
-   - Aqui NÃO faz checkout automaticamente (isso é no reserva.js)
-   - Só habilita e mostra mensagem para você usar no fluxo.
-========================= */
 function bindFecharConta() {
   if (!elBtnFechar) return;
-
   elBtnFechar.addEventListener("click", () => {
     const { saldo } = computeTotals();
     if (saldo > 0.0000001) {
@@ -494,11 +496,10 @@ function bindFecharConta() {
 }
 
 /* =========================
-   Boot
+   BOOT
 ========================= */
 (async function boot() {
   try {
-    // garante sessão (não renderiza userbox; isso fica no seu HTML guard)
     const user = await requireAuth({
       redirectTo: `/entrar.html?next=${encodeURIComponent(location.pathname + location.search)}`,
       renderUserInfo: false,
