@@ -138,26 +138,41 @@ function escapeHtml(str) {
 }
 
 /* =========================
-   Status (DAY USE)
+   Status (DB enum) + labels (PT-BR)
 ========================= */
-// alinhado com teu DB real: reserved / hospedado / finalizado / cancelado
+const STATUS = Object.freeze({
+  QUOTE: "quote",
+  RESERVED: "reserved",
+  CONFIRMED: "confirmed",
+  IN_HOUSE: "in_house",
+  CHECKED_OUT: "checked_out",
+  CANCELLED: "cancelled",
+  NO_SHOW: "no_show",
+});
+
 function statusLabel(db) {
   const s = String(db || "").toLowerCase();
-  if (s === "reserved") return "Reservada";
-  if (s === "hospedado") return "Hospedado";
-  if (s === "finalizado") return "Finalizado";
-  if (s === "cancelado") return "Cancelado";
-  return s ? s : "—";
+  return ({
+    quote: "Orçamento",
+    reserved: "Reservada",
+    confirmed: "Confirmada",
+    in_house: "Hospedado",
+    checked_out: "Finalizada",
+    cancelled: "Cancelada",
+    no_show: "No-show",
+  })[s] || (s ? s : "—");
 }
 
+// “Visão” (timeline) independente do status do DB
 function statusFrom(r) {
-  const stDb = String(r?.status || "").toLowerCase();
   const t = todayISO();
   const ci = String(r?.checkin || "");
   const co = String(r?.checkout || "");
+  const stDb = String(r?.status || "").toLowerCase();
 
-  if (stDb === "cancelado") return { key: "past", label: "Cancelado" };
-  if (stDb === "finalizado") return { key: "past", label: "Finalizado" };
+  if (stDb === STATUS.CANCELLED) return { key: "past", label: "Cancelada" };
+  if (stDb === STATUS.CHECKED_OUT) return { key: "past", label: "Finalizada" };
+  if (stDb === STATUS.NO_SHOW) return { key: "past", label: "No-show" };
 
   // FUTURA
   if (ci && ci > t) return { key: "future", label: "Futura" };
@@ -165,13 +180,12 @@ function statusFrom(r) {
   // HOJE (inclui day-use)
   if (ci && ci === t) return { key: "today", label: "Hoje" };
 
-  // EM ANDAMENTO
+  // EM ANDAMENTO (pelo período)
   if (ci && co && ci < t && co >= t) return { key: "today", label: "Em andamento" };
 
-  // PASSADA
+  // PASSADA (mas não finalizada no DB)
   if (co && co < t) return { key: "past", label: "Passada" };
 
-  // fallback
   return { key: "all", label: statusLabel(stDb) || "Ativa" };
 }
 
@@ -186,8 +200,7 @@ function setStatusUI(r) {
 
   let hint = "";
   if (ci && co && ci === co) hint = "Day use (check-in = check-out).";
-  if (db === "reserved") hint = hint ? `${hint} Reservada.` : "Reservada.";
-  if (db === "hospedado") hint = hint ? `${hint} Hospedado.` : "Hospedado.";
+  if (db) hint = hint ? `${hint} ${statusLabel(db)}.` : `${statusLabel(db)}.`;
   if (co === t) hint = hint ? `${hint} Saída hoje.` : "Saída hoje.";
 
   if (elHint) {
@@ -195,13 +208,13 @@ function setStatusUI(r) {
     elHint.textContent = hint;
   }
 
-  // Botões PMS — regras simples e práticas (MVP)
-  // check-in aparece se status=reserved
-  // checkout aparece se status=hospedado
-  // cancelar aparece se não estiver finalizado/cancelado
-  const canCheckin = db === "reserved";
-  const canCheckout = db === "hospedado";
-  const canCancel = db !== "finalizado" && db !== "cancelado";
+  // Botões PMS
+  // check-in: reserved/confirmed -> in_house
+  // checkout: in_house -> checked_out
+  // cancelar: enquanto não estiver checked_out/cancelled/no_show
+  const canCheckin = (db === STATUS.RESERVED || db === STATUS.CONFIRMED);
+  const canCheckout = (db === STATUS.IN_HOUSE);
+  const canCancel = ![STATUS.CHECKED_OUT, STATUS.CANCELLED, STATUS.NO_SHOW].includes(db);
 
   if (btnCheckin) btnCheckin.style.display = canCheckin ? "" : "none";
   if (btnCheckout) btnCheckout.style.display = canCheckout ? "" : "none";
@@ -384,61 +397,61 @@ function bindInputs() {
 }
 
 function bindActions() {
-  // CHECK-IN -> hospedado
-  btnCheckin?.addEventListener("click", async () => {
-    try {
-      if (!USER?.id || !RES_ID) return;
-      setPmsMsg("Fazendo check-in…");
+// CHECK-IN -> in_house
+btnCheckin?.addEventListener("click", async () => {
+  try {
+    if (!USER?.id || !RES_ID) return;
+    setPmsMsg("Fazendo check-in…");
 
-      const updated = await updateReserva(USER.id, RES_ID, { status: "hospedado" });
-      ROW = updated;
-      fillForm(ROW);
-      setPmsMsg("Check-in feito ✅", "ok");
-    } catch (e) {
-      console.error("[reserva] checkin error:", e);
-      setPmsMsg("Erro ao fazer check-in (RLS/constraint).", "error");
-    }
-  });
+    const updated = await updateReserva(USER.id, RES_ID, { status: STATUS.IN_HOUSE });
+    ROW = updated;
+    fillForm(ROW);
+    setPmsMsg("Check-in feito ✅", "ok");
+  } catch (e) {
+    console.error("[reserva] checkin error:", e);
+    setPmsMsg("Erro ao fazer check-in.", "error");
+  }
+});
 
-  // CHECKOUT -> finalizado
-  btnCheckout?.addEventListener("click", async () => {
-    try {
-      if (!USER?.id || !RES_ID) return;
+// CHECKOUT -> checked_out
+btnCheckout?.addEventListener("click", async () => {
+  try {
+    if (!USER?.id || !RES_ID) return;
 
-      const ok = confirm("Fechar / Checkout dessa hospedagem?");
-      if (!ok) return;
+    const ok = confirm("Fechar / Checkout dessa hospedagem?");
+    if (!ok) return;
 
-      setPmsMsg("Fazendo checkout…");
+    setPmsMsg("Fazendo checkout…");
 
-      const updated = await updateReserva(USER.id, RES_ID, { status: "finalizado" });
-      ROW = updated;
-      fillForm(ROW);
-      setPmsMsg("Checkout feito ✅", "ok");
-    } catch (e) {
-      console.error("[reserva] checkout error:", e);
-      setPmsMsg("Erro ao fazer checkout (RLS/constraint).", "error");
-    }
-  });
+    const updated = await updateReserva(USER.id, RES_ID, { status: STATUS.CHECKED_OUT });
+    ROW = updated;
+    fillForm(ROW);
+    setPmsMsg("Checkout feito ✅", "ok");
+  } catch (e) {
+    console.error("[reserva] checkout error:", e);
+    setPmsMsg("Erro ao fazer checkout.", "error");
+  }
+});
 
-  // CANCELAR -> cancelado
-  btnCancelar?.addEventListener("click", async () => {
-    try {
-      if (!USER?.id || !RES_ID) return;
+// CANCELAR -> cancelled
+btnCancelar?.addEventListener("click", async () => {
+  try {
+    if (!USER?.id || !RES_ID) return;
 
-      const ok = confirm("Cancelar esta reserva? (Ela ficará como 'Cancelado')");
-      if (!ok) return;
+    const ok = confirm("Cancelar esta reserva? (Ela ficará como 'Cancelada')");
+    if (!ok) return;
 
-      setPmsMsg("Cancelando…");
+    setPmsMsg("Cancelando…");
 
-      const updated = await updateReserva(USER.id, RES_ID, { status: "cancelado" });
-      ROW = updated;
-      fillForm(ROW);
-      setPmsMsg("Reserva cancelada ✅", "ok");
-    } catch (e) {
-      console.error("[reserva] cancel error:", e);
-      setPmsMsg("Erro ao cancelar (RLS/constraint).", "error");
-    }
-  });
+    const updated = await updateReserva(USER.id, RES_ID, { status: STATUS.CANCELLED });
+    ROW = updated;
+    fillForm(ROW);
+    setPmsMsg("Reserva cancelada ✅", "ok");
+  } catch (e) {
+    console.error("[reserva] cancel error:", e);
+    setPmsMsg("Erro ao cancelar.", "error");
+  }
+});
 
   // EXCLUIR
   btnExcluir?.addEventListener("click", async () => {
