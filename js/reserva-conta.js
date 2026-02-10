@@ -1,6 +1,7 @@
-// /js/reserva-conta.js — Conta da Reserva (V1.1 - JOIN SAFE + COLUMN SAFE)
-// - JOIN SAFE: usa reserva_id e user_id
-// - COLUMN SAFE: se coluna não existir (ex: obs), faz fallback automático
+// /js/reserva-conta.js — Conta da Reserva (V1.2 - CONTA_ID SAFE + JOIN SAFE + COLUMN SAFE)
+// - Resolve erro 23502 (conta_id null) criando/obtendo agenda_contas automaticamente
+// - JOIN SAFE: sempre filtra por user_id + reserva_id
+// - COLUMN SAFE: fallback automático se coluna não existir (ex: obs em pagamentos)
 // - Totais: Total (lancamentos), Pago (pagamentos), Saldo = Total - Pago
 // - Compatível com reserva.html (ids do seu HTML)
 
@@ -34,6 +35,7 @@ const inPObs = $("#pObs");
 const STATE = {
   user: null,
   reservaId: null,
+  contaId: null,          // ✅ NOVO: obrigatório p/ inserts
   lancamentos: [],
   pagamentos: [],
 };
@@ -103,14 +105,100 @@ function computeTotals() {
 }
 
 /* =========================
+   CONTA_ID SAFE (fix 23502)
+========================= */
+
+// tenta descobrir colunas reais da agenda_contas para montar insert seguro
+async function getAgendaContasColumns() {
+  const { data, error } = await supabase
+    .from("information_schema.columns")
+    .select("column_name")
+    .eq("table_schema", "public")
+    .eq("table_name", "agenda_contas");
+
+  if (error) {
+    // se RLS bloquear information_schema via postgrest, seguimos sem introspecção
+    return null;
+  }
+  return (data || []).map((x) => x.column_name);
+}
+
+function buildContaInsertPayload(columns, userId, reservaId) {
+  // mínimo que geralmente existe:
+  // id (uuid default), user_id, reserva_id, created_at, updated_at, status? etc.
+  const base = {};
+  const cols = Array.isArray(columns) ? new Set(columns) : null;
+
+  // se não conseguimos introspecção, tentamos o mais provável (e tratamos erro)
+  const has = (name) => (cols ? cols.has(name) : true);
+
+  if (has("user_id")) base.user_id = userId;
+  if (has("reserva_id")) base.reserva_id = reservaId;
+
+  const now = new Date().toISOString();
+  if (has("created_at")) base.created_at = now;
+  if (has("updated_at")) base.updated_at = now;
+
+  // status opcional (se existir)
+  if (has("status")) base.status = "open"; // ajuste se teu enum for diferente
+
+  return base;
+}
+
+async function findContaId(userId, reservaId) {
+  const { data, error } = await supabase
+    .from("agenda_contas")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("reserva_id", reservaId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id || null;
+}
+
+async function createConta(userId, reservaId) {
+  // tenta insert com payload seguro
+  const cols = await getAgendaContasColumns();
+  const payload = buildContaInsertPayload(cols, userId, reservaId);
+
+  const { data, error } = await supabase
+    .from("agenda_contas")
+    .insert(payload)
+    .select("id")
+    .single();
+
+  if (!error) return data?.id;
+
+  // fallback: insert mínimo (user_id + reserva_id)
+  // (caso created_at/status não existam e causem erro)
+  const { data: d2, error: e2 } = await supabase
+    .from("agenda_contas")
+    .insert({ user_id: userId, reserva_id: reservaId })
+    .select("id")
+    .single();
+
+  if (e2) throw e2;
+  return d2?.id;
+}
+
+async function ensureContaId(userId, reservaId) {
+  // 1) já existe?
+  const existing = await findContaId(userId, reservaId);
+  if (existing) return existing;
+
+  // 2) cria
+  return await createConta(userId, reservaId);
+}
+
+/* =========================
    LOAD — column safe
 ========================= */
 
 async function loadLancamentos(userId, reservaId) {
-  // aqui supomos que descrição/valor/tipo existem. Se não, o erro vai aparecer no console.
   const { data, error } = await supabase
     .from("agenda_lancamentos")
-    .select("id,reserva_id,descricao,valor,tipo,created_at")
+    .select("id,conta_id,reserva_id,descricao,valor,tipo,created_at")
     .eq("user_id", userId)
     .eq("reserva_id", reservaId)
     .order("created_at", { ascending: false });
@@ -124,7 +212,7 @@ async function loadPagamentos(userId, reservaId) {
   {
     const { data, error } = await supabase
       .from("agenda_pagamentos")
-      .select("id,reserva_id,forma,valor,obs,created_at")
+      .select("id,conta_id,reserva_id,forma,valor,obs,created_at")
       .eq("user_id", userId)
       .eq("reserva_id", reservaId)
       .order("created_at", { ascending: false });
@@ -135,14 +223,12 @@ async function loadPagamentos(userId, reservaId) {
     if (isMissingColumnError(error, "obs")) {
       const { data: d2, error: e2 } = await supabase
         .from("agenda_pagamentos")
-        .select("id,reserva_id,forma,valor,created_at")
+        .select("id,conta_id,reserva_id,forma,valor,created_at")
         .eq("user_id", userId)
         .eq("reserva_id", reservaId)
         .order("created_at", { ascending: false });
 
       if (e2) throw e2;
-
-      // injeta obs=null para manter render consistente
       return (Array.isArray(d2) ? d2 : []).map((x) => ({ ...x, obs: null }));
     }
 
@@ -151,15 +237,18 @@ async function loadPagamentos(userId, reservaId) {
 }
 
 /* =========================
-   INSERT — column safe
+   INSERT — conta_id safe
 ========================= */
 
-async function insertLancamento(userId, reservaId, payload) {
+async function insertLancamento(userId, reservaId, contaId, payload) {
+  if (!contaId) throw new Error("conta_id ausente (ensureContaId falhou).");
+
   const { data, error } = await supabase
     .from("agenda_lancamentos")
     .insert({
       user_id: userId,
       reserva_id: reservaId,
+      conta_id: contaId, // ✅ FIX
       descricao: payload.descricao,
       valor: payload.valor,
       tipo: payload.tipo || "extra",
@@ -171,13 +260,16 @@ async function insertLancamento(userId, reservaId, payload) {
   return data?.id;
 }
 
-async function insertPagamento(userId, reservaId, payload) {
+async function insertPagamento(userId, reservaId, contaId, payload) {
+  if (!contaId) throw new Error("conta_id ausente (ensureContaId falhou).");
+
   // tenta com obs
   const attempt1 = await supabase
     .from("agenda_pagamentos")
     .insert({
       user_id: userId,
       reserva_id: reservaId,
+      conta_id: contaId, // ✅ FIX
       forma: payload.forma || "pix",
       valor: payload.valor,
       obs: payload.obs || null,
@@ -194,6 +286,7 @@ async function insertPagamento(userId, reservaId, payload) {
       .insert({
         user_id: userId,
         reserva_id: reservaId,
+        conta_id: contaId, // ✅ FIX
         forma: payload.forma || "pix",
         valor: payload.valor,
       })
@@ -418,12 +511,16 @@ function bindLancForm() {
       return;
     }
 
+    const btn = formLanc.querySelector("button[type='submit']");
     try {
       setMsg("Salvando lançamento…", "info");
-      const btn = formLanc.querySelector("button[type='submit']");
       if (btn) btn.disabled = true;
 
-      await insertLancamento(STATE.user.id, STATE.reservaId, { descricao: desc, tipo, valor: valorNum });
+      await insertLancamento(STATE.user.id, STATE.reservaId, STATE.contaId, {
+        descricao: desc,
+        tipo,
+        valor: valorNum,
+      });
 
       if (inLDesc) inLDesc.value = "";
       if (inLValor) inLValor.value = "";
@@ -432,9 +529,13 @@ function bindLancForm() {
       setMsg("Lançamento adicionado ✅", "ok");
     } catch (err) {
       console.error("[conta] insertLancamento:", err);
-      setMsg("Erro ao adicionar lançamento.", "error");
+      const msg = String(err?.message || "").toLowerCase();
+      if (String(err?.code || "") === "23502" && msg.includes("conta_id")) {
+        setMsg("Erro: conta_id obrigatório. A conta não foi criada/vinculada ainda.", "error");
+      } else {
+        setMsg("Erro ao adicionar lançamento.", "error");
+      }
     } finally {
-      const btn = formLanc.querySelector("button[type='submit']");
       if (btn) btn.disabled = false;
     }
   });
@@ -461,12 +562,16 @@ function bindPagForm() {
       return;
     }
 
+    const btn = formPag.querySelector("button[type='submit']");
     try {
       setMsg("Registrando pagamento…", "info");
-      const btn = formPag.querySelector("button[type='submit']");
       if (btn) btn.disabled = true;
 
-      await insertPagamento(STATE.user.id, STATE.reservaId, { forma, valor: valorNum, obs: obs || null });
+      await insertPagamento(STATE.user.id, STATE.reservaId, STATE.contaId, {
+        forma,
+        valor: valorNum,
+        obs: obs || null,
+      });
 
       if (inPValor) inPValor.value = "";
       if (inPObs) inPObs.value = "";
@@ -475,9 +580,13 @@ function bindPagForm() {
       setMsg("Pagamento registrado ✅", "ok");
     } catch (err) {
       console.error("[conta] insertPagamento:", err);
-      setMsg("Erro ao registrar pagamento.", "error");
+      const msg = String(err?.message || "").toLowerCase();
+      if (String(err?.code || "") === "23502" && msg.includes("conta_id")) {
+        setMsg("Erro: conta_id obrigatório. A conta não foi criada/vinculada ainda.", "error");
+      } else {
+        setMsg("Erro ao registrar pagamento.", "error");
+      }
     } finally {
-      const btn = formPag.querySelector("button[type='submit']");
       if (btn) btn.disabled = false;
     }
   });
@@ -520,11 +629,33 @@ function bindFecharConta() {
     setPill("Carregando…", "info");
     setMsg("");
 
+    // ✅ garante conta_id antes de permitir inserts
+    try {
+      STATE.contaId = await ensureContaId(STATE.user.id, STATE.reservaId);
+    } catch (e) {
+      console.error("[conta] ensureContaId error:", e);
+      setPill("Indisponível", "error");
+      setMsg("Não foi possível criar/vincular a conta desta reserva (RLS/constraint).", "error");
+      // ainda deixa carregar listas (caso existam), mas bloqueia inserts
+      STATE.contaId = null;
+    }
+
+    // UI: se não tiver conta, desabilita formulários para não dar 23502
+    const disableForms = !STATE.contaId;
+    [formLanc, formPag].forEach((f) => {
+      if (!f) return;
+      f.querySelectorAll("input,select,textarea,button").forEach((el) => (el.disabled = disableForms));
+      if (disableForms) f.style.opacity = ".6";
+    });
+
     bindLancForm();
     bindPagForm();
     bindFecharConta();
 
     await refresh();
+
+    // pill pós-load
+    if (STATE.contaId) setPill("Pronta", "ok");
   } catch (e) {
     console.error("[conta] boot error:", e);
     setPill("Erro", "error");
